@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebMCP - Give AI Agents the Power to Browse</title>
+    <meta name="description"
+        content="The Model Context Protocol (MCP) server that enables AI agents to control browsers, fill forms, and scrape data like a human.">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" type="image/png" href="assets/icon.png">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Inter:wght@400;500;600&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="logo">
+            <img src="assets/icon.png" alt="WebMCP Logo" class="logo-img">
+            <span class="logo-text">WebMCP</span>
+        </div>
+        <div class="nav-links">
+            <a href="#features">Features</a>
+            <a href="#how-it-works">How it Works</a>
+            <a href="#demo">Demo</a>
+            <a href="https://github.com/user/webmcp" class="github-link" target="_blank">
+                <svg height="20" width="20" viewBox="0 0 16 16" fill="currentColor">
+                    <path
+                        d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z">
+                    </path>
+                </svg>
+                GitHub
+            </a>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <header class="hero">
+        <div class="hero-content">
+            <div class="badge">v1.0 Production Ready</div>
+            <h1>Give Your AI <span class="gradient-text">Eyes and Hands</span></h1>
+            <p class="hero-subtitle">
+                WebMCP turns your browser into a programmable interface—letting AI navigate, click, and type on any
+                website, exactly like you would.
+            </p>
+            <p class="hero-privacy">
+                100% local. <strong>Your credentials never leave your machine.</strong>
+            </p>
+            <p class="hero-works-with">
+                Works with Claude. Works with Cursor. Works with anything you build.
+            </p>
+            <div class="cta-group">
+                <a href="https://github.com/user/webmcp" class="btn btn-primary">
+                    Get Started via GitHub
+                </a>
+                <div class="install-cmd">
+                    <code>npm install -g webagent-mcp</code>
+                    <button class="copy-btn"
+                        onclick="navigator.clipboard.writeText('npm install -g webagent-mcp')">📋</button>
+                </div>
+            </div>
+        </div>
+        <div class="hero-visual">
+            <div class="browser-mockup">
+                <div class="browser-header">
+                    <span class="dot red"></span>
+                    <span class="dot yellow"></span>
+                    <span class="dot green"></span>
+                    <div class="url-bar">https://webagent.ai</div>
+                </div>
+                <div class="browser-body">
+                    <div class="ai-cursor">
+                        <div class="cursor-pointer">➤</div>
+                        <div class="cursor-label">Claude</div>
+                    </div>
+                    <div class="code-snippet">
+                        <span class="comment">// AI Thought Process:</span><br>
+                        <span class="keyword">await</span> web_navigate(<span
+                            class="string">"linkedin.com/jobs"</span>);<br>
+                        <span class="keyword">await</span> web_type(<span class="string">"#search"</span>, <span
+                            class="string">"engineer"</span>);<br>
+                        <span class="keyword">await</span> web_click(<span class="string">".apply-btn"</span>);
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Features -->
+    <section id="features" class="features">
+        <h2>Why <span class="gradient-text">WebMCP?</span></h2>
+        <div class="feature-grid">
+            <div class="feature-card">
+                <div class="icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path
+                            d="M12 2a10 10 0 0 0-10 10c0 4.418 2.865 8.166 6.839 9.49.5.092.682-.217.682-.482v-1.691c-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.751 1.026A9.606 9.606 0 0 1 12 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855v2.751c0 .267.18.577.688.48A10.001 10.001 0 0 0 12 2z" />
+                    </svg>
+                </div>
+                <h3>Undetectable by Design</h3>
+                <p>Native mouse movements, human-like typing delays, and realistic event dispatching. Bypasses
+                    sophisticated bot protections.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                </div>
+                <h3>Semantic Understanding</h3>
+                <p>Parses pages into intelligent accessibility trees. Agents "see" interactive elements (buttons,
+                    forms), not just raw pixels.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+                        <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+                        <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                        <line x1="6" y1="18" x2="6.01" y2="18"></line>
+                    </svg>
+                </div>
+                <h3>Universal MCP Support</h3>
+                <p>Native integration with <strong>Claude Desktop</strong>, <strong>Cursor</strong>, and any
+                    MCP-compatible AI agent. If it speaks MCP, it controls your browser.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                    </svg>
+                </div>
+                <h3>Local & Secure</h3>
+                <p>Runs entirely on <em>your</em> machine using <em>your</em> existing cookies and session. 0ms latency,
+                    100% data privacy.</p>
+            </div>
+        </div>
+
+        <div class="developer-cta">
+            <p>Fully programmable via <span class="highlight">WebSocket API</span> or <span class="highlight">Node.js
+                    SDK</span>.</p>
+            <a href="https://github.com/Juggernaath/webmcp" target="_blank" class="text-link">View Documentation <span
+                    class="arrow">→</span></a>
+        </div>
+    </section>
+
+    <!-- Comparison Section -->
+    <section id="comparison" class="comparison">
+        <div class="section-header">
+            <h2>How WebMCP <span class="gradient-text">Compares</span></h2>
+            <p class="section-subtitle">Choose the right tool for your specific use case</p>
+        </div>
+
+        <div class="table-container">
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th class="feature-col">Feature</th>
+                        <th class="highlight-col">
+                            <div class="th-content">
+                                <img src="assets/icon.png" alt="WebMCP" class="th-icon">
+                                WebMCP
+                            </div>
+                        </th>
+                        <th>Puppeteer</th>
+                        <th>Cloud Browsers</th>
+                        <th>AI Agents</th>
+                        <th>Computer Use</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="feature-name">
+                            Native Browser
+                            <span class="tooltip" data-tip="Runs inside your actual Chrome via extension">ⓘ</span>
+                        </td>
+                        <td class="highlight-cell">
+                            <div class="check-icon"></div>
+                        </td>
+                        <td>
+                            <div class="cross-icon"></div>
+                        </td>
+                        <td>
+                            <div class="cross-icon"></div>
+                        </td>
+                        <td>
+                            <div class="cross-icon"></div>
+                        </td>
+                        <td>
+                            <div class="cross-icon"></div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">
+                            Session-aware
+                            <span class="tooltip" data-tip="Uses your existing cookies and login state">ⓘ</span>
+                        </td>
+                        <td class="highlight-cell">
+                            <div class="check-icon"></div>
+                        </td>
+                        <td>
+                            <div class="cross-icon"></div>
+                        </td>
+                        <td>
+                            <div class="cross-icon"></div>
+                        </td>
+                        <td>
+                            <div class="cross-icon"></div>
+                        </td>
+                        <td>
+                            <div class="cross-icon"></div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">
+                            Local Execution
+                            <span class="tooltip" data-tip="Data never leaves your machine">ⓘ</span>
+                        </td>
+                        <td class="highlight-cell">
+                            <div class="check-icon"></div>
+                        </td>
+                        <td>
+                            <div class="check-icon"></div>
+                        </td>
+                        <td>
+                            <div class="cross-icon"></div>
+                        </td>
+                        <td>
+                            <div class="cross-icon"></div>
+                        </td>
+                        <td>
+                            <div class="check-icon"></div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">
+                            Semantic DOM
+                            <span class="tooltip" data-tip="Reads page structure, not screenshots">ⓘ</span>
+                        </td>
+                        <td class="highlight-cell">
+                            <div class="check-icon"></div>
+                        </td>
+                        <td>
+                            <div class="check-icon"></div>
+                        </td>
+                        <td>
+                            <div class="check-icon"></div>
+                        </td>
+                        <td>
+                            <div class="check-icon"></div>
+                        </td>
+                        <td>
+                            <div class="cross-icon"></div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">
+                            Visible Actions
+                            <span class="tooltip" data-tip="Watch automation happen in real-time">ⓘ</span>
+                        </td>
+                        <td class="highlight-cell">
+                            <div class="check-icon"></div>
+                        </td>
+                        <td>
+                            <div class="cross-icon"></div>
+                        </td>
+                        <td>
+                            <div class="cross-icon"></div>
+                        </td>
+                        <td>
+                            <div class="cross-icon"></div>
+                        </td>
+                        <td>
+                            <div class="check-icon"></div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">
+                            MCP-Native
+                            <span class="tooltip" data-tip="Built for Claude/Cursor integration">ⓘ</span>
+                        </td>
+                        <td class="highlight-cell">
+                            <div class="check-icon"></div>
+                        </td>
+                        <td>
+                            <div class="cross-icon"></div>
+                        </td>
+                        <td>
+                            <div class="cross-icon"></div>
+                        </td>
+                        <td>
+                            <div class="cross-icon"></div>
+                        </td>
+                        <td>
+                            <div class="check-icon"></div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- How it Works -->
+    <section id="how-it-works" class="steps">
+        <h2>How It Works</h2>
+        <div class="step-container">
+            <div class="step">
+                <div class="step-number">1</div>
+                <h3>Install Extension</h3>
+                <p>Add the WebMCP extension to your Chrome browser to enable local control.</p>
+            </div>
+            <div class="step-line"></div>
+            <div class="step">
+                <div class="step-number">2</div>
+                <h3>Start Server</h3>
+                <p>Run the local MCP server that bridges your AI to the browser via WebSockets.</p>
+            </div>
+            <div class="step-line"></div>
+            <div class="step">
+                <div class="step-number">3</div>
+                <h3>Connect AI</h3>
+                <p>Point Claude or Cursor to your local server and start browsing naturally.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="footer-content">
+            <div class="footer-col">
+                <div class="footer-logo">WebMCP</div>
+                <p>Give your AI agents the power to browse the web. Secure, local, and production-ready.</p>
+            </div>
+            <div class="footer-col">
+                <h4>Resources</h4>
+                <a href="https://github.com/Juggernaath/webmcp" target="_blank">GitHub</a>
+                <a href="https://www.npmjs.com/package/webagent-mcp" target="_blank">NPM Package</a>
+                <a href="https://modelcontextprotocol.io" target="_blank">MCP Documentation</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2026 WebMCP. All rights reserved.</p>
+        </div>
+    </footer>
+
+</body>
+
+</html>

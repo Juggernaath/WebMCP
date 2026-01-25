@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebMCP</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            width: 400px;
+            min-height: 500px;
+            background: #0f0f0f;
+            color: #e0e0e0;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            padding: 16px;
+            border-bottom: 1px solid #2d2d44;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-img {
+            width: 32px;
+            height: 32px;
+            filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.5));
+        }
+
+        .logo-text {
+            font-size: 18px;
+            font-weight: 700;
+            background: linear-gradient(to right, #fff, #a5b4fc);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: inline-block;
+        }
+
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            background: #1a1a1a;
+            border-bottom: 1px solid #2d2d2d;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .status-dot.connected {
+            background: #22c55e;
+            box-shadow: 0 0 8px #22c55e50;
+        }
+
+        .status-dot.disconnected {
+            background: #71717a;
+        }
+
+        .status-dot.recording {
+            background: #ef4444;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.4;
+            }
+        }
+
+        .header-btn {
+            background: #dc2626;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .header-btn:hover {
+            background: #b91c1c;
+        }
+
+        .header-btn:disabled {
+            background: #525252;
+            cursor: not-allowed;
+        }
+
+        .header-btn.primary {
+            background: #4f46e5;
+        }
+
+        .header-btn.primary:hover {
+            background: #4338ca;
+        }
+
+        .tabs {
+            display: flex;
+            background: #1a1a1a;
+            border-bottom: 1px solid #2d2d2d;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 12px 8px;
+            text-align: center;
+            font-size: 12px;
+            color: #888;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .tab:hover {
+            color: #ccc;
+        }
+
+        .tab.active {
+            color: #7c3aed;
+            border-bottom-color: #7c3aed;
+        }
+
+        .content {
+            padding: 16px;
+            max-height: 350px;
+            overflow-y: auto;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Record Tab */
+        .record-controls {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .record-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .record-btn.start {
+            background: #dc2626;
+            color: white;
+        }
+
+        .record-btn.start:hover {
+            background: #b91c1c;
+        }
+
+        .record-btn.stop {
+            background: #525252;
+            color: white;
+        }
+
+        .record-btn.stop:hover {
+            background: #404040;
+        }
+
+        .record-btn.save {
+            background: #22c55e;
+            color: white;
+        }
+
+        .record-btn.save:hover {
+            background: #16a34a;
+        }
+
+        .record-btn:disabled {
+            background: #2d2d2d;
+            color: #666;
+            cursor: not-allowed;
+        }
+
+        .action-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .action-item {
+            background: #1a1a1a;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .action-icon {
+            font-size: 14px;
+        }
+
+        .action-text {
+            flex: 1;
+            color: #ccc;
+        }
+
+        .action-time {
+            color: #666;
+            font-size: 11px;
+        }
+
+        /* Tasks Tab */
+        .task-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .task-item {
+            background: #1a1a1a;
+            border-radius: 8px;
+            padding: 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .task-info {
+            flex: 1;
+        }
+
+        .task-name {
+            font-weight: 500;
+            font-size: 13px;
+            margin-bottom: 2px;
+        }
+
+        .task-meta {
+            font-size: 11px;
+            color: #666;
+        }
+
+        .task-actions {
+            display: flex;
+            gap: 6px;
+        }
+
+        .task-btn {
+            background: #2d2d2d;
+            border: none;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            color: #ccc;
+        }
+
+        .task-btn:hover {
+            background: #404040;
+        }
+
+        .task-btn.play {
+            background: #4f46e5;
+            color: white;
+        }
+
+        /* Scrape Tab */
+        .scrape-section {
+            margin-bottom: 16px;
+        }
+
+        .scrape-label {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .scrape-btn {
+            width: 100%;
+            padding: 12px;
+            background: #1a1a1a;
+            border: 1px solid #2d2d2d;
+            border-radius: 8px;
+            color: #e0e0e0;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .scrape-btn:hover {
+            background: #252525;
+            border-color: #4f46e5;
+        }
+
+        .scrape-result {
+            background: #1a1a1a;
+            border-radius: 8px;
+            padding: 12px;
+            font-family: monospace;
+            font-size: 11px;
+            max-height: 150px;
+            overflow: auto;
+            white-space: pre-wrap;
+            display: none;
+        }
+
+        /* Activity Tab */
+        .activity-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .activity-item {
+            background: #1a1a1a;
+            border-radius: 8px;
+            padding: 10px 12px;
+            border-left: 3px solid #4f46e5;
+        }
+
+        .activity-item.error {
+            border-left-color: #ef4444;
+        }
+
+        .activity-action {
+            font-weight: 500;
+            font-size: 13px;
+            color: #e0e0e0;
+        }
+
+        .activity-time {
+            font-size: 11px;
+            color: #666;
+            margin-top: 2px;
+        }
+
+        .activity-source {
+            font-size: 11px;
+            color: #888;
+            background: #2d2d2d;
+            padding: 2px 6px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-top: 4px;
+        }
+
+        /* Settings Tab */
+        .setting-group {
+            margin-bottom: 16px;
+        }
+
+        .setting-label {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .toggle-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #2d2d2d;
+        }
+
+        .toggle-label {
+            font-size: 13px;
+        }
+
+        .toggle {
+            width: 40px;
+            height: 22px;
+            background: #2d2d2d;
+            border-radius: 11px;
+            position: relative;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .toggle.active {
+            background: #4f46e5;
+        }
+
+        .toggle::after {
+            content: '';
+            position: absolute;
+            width: 18px;
+            height: 18px;
+            background: white;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: left 0.2s;
+        }
+
+        .toggle.active::after {
+            left: 20px;
+        }
+
+        /* MCP Upgrade Section */
+        .mcp-section {
+            background: linear-gradient(135deg, rgba(79, 70, 229, 0.1), rgba(124, 58, 237, 0.1));
+            border: 1px solid rgba(79, 70, 229, 0.3);
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 16px;
+        }
+
+        .mcp-title {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .mcp-desc {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 12px;
+        }
+
+        .mcp-btn {
+            width: 100%;
+            padding: 10px;
+            background: #4f46e5;
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .mcp-btn:hover {
+            background: #4338ca;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 32px;
+            color: #666;
+            font-size: 13px;
+        }
+
+        .footer {
+            padding: 12px 16px;
+            background: #1a1a1a;
+            border-top: 1px solid #2d2d2d;
+            font-size: 11px;
+            color: #666;
+            text-align: center;
+        }
+
+        .footer a {
+            color: #7c3aed;
+            text-decoration: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <div class="logo">
+            <img src="../icons/icon48.png" alt="WebMCP" class="logo-img">
+            <span class="logo-text">WebMCP</span>
+        </div>
+    </div>
+
+    <div class="status-bar">
+        <div class="status">
+            <span class="status-dot" id="statusDot"></span>
+            <span id="statusText">Ready</span>
+        </div>
+        <button class="header-btn" id="killSwitch" disabled>Stop All</button>
+    </div>
+
+    <div class="tabs">
+        <div class="tab active" data-tab="record">Record</div>
+        <div class="tab" data-tab="tasks">Tasks</div>
+        <div class="tab" data-tab="scrape">Scrape</div>
+        <div class="tab" data-tab="activity">Activity</div>
+        <div class="tab" data-tab="settings">Settings</div>
+    </div>
+
+    <div class="content">
+        <!-- Record Tab -->
+        <div class="tab-content active" id="record-tab">
+            <div class="record-controls">
+                <button class="record-btn start" id="recordStart">
+                    <span>⏺</span> Start Recording
+                </button>
+                <button class="record-btn stop" id="recordStop" disabled>
+                    <span>⏹</span> Stop
+                </button>
+            </div>
+            <div class="action-list" id="recordingActions">
+                <div class="empty-state">Click "Start Recording" to capture browser actions</div>
+            </div>
+        </div>
+
+        <!-- Tasks Tab -->
+        <div class="tab-content" id="tasks-tab">
+            <div class="task-list" id="taskList">
+                <div class="empty-state">No saved tasks yet.<br>Record actions and save them as tasks.</div>
+            </div>
+        </div>
+
+        <!-- Scrape Tab -->
+        <div class="tab-content" id="scrape-tab">
+            <div class="scrape-section">
+                <div class="scrape-label">Extract Data</div>
+                <button class="scrape-btn" id="scrapeText">
+                    <span>📄</span> Extract Page Text
+                </button>
+            </div>
+            <div class="scrape-section">
+                <button class="scrape-btn" id="scrapeTables">
+                    <span>📊</span> Extract Tables (JSON)
+                </button>
+            </div>
+            <div class="scrape-section">
+                <button class="scrape-btn" id="scrapeLinks">
+                    <span>🔗</span> Extract All Links
+                </button>
+            </div>
+            <div class="scrape-section">
+                <button class="scrape-btn" id="scrapeConsole">
+                    <span>🖥️</span> Capture Console Logs
+                </button>
+            </div>
+            <div class="scrape-section">
+                <button class="scrape-btn" id="scrapeNetwork">
+                    <span>🌐</span> Capture Network Requests
+                </button>
+            </div>
+            <div class="scrape-result" id="scrapeResult"></div>
+        </div>
+
+        <!-- Activity Tab -->
+        <div class="tab-content" id="activity-tab">
+            <div class="activity-list" id="activityList">
+                <div class="empty-state">No recent activity</div>
+            </div>
+        </div>
+
+        <!-- Settings Tab -->
+        <div class="tab-content" id="settings-tab">
+            <div class="toggle-row">
+                <span class="toggle-label">Enable Activity Logging</span>
+                <div class="toggle active" id="toggleLogging"></div>
+            </div>
+
+            <div class="toggle-row">
+                <span class="toggle-label">Human-like Delays</span>
+                <div class="toggle active" id="toggleHumanDelays"></div>
+            </div>
+
+            <!-- MCP Upgrade Section -->
+            <div class="mcp-section" id="mcpSection">
+                <div class="mcp-title">
+                    <span>🤖</span> Enable AI Control
+                </div>
+                <div class="mcp-desc">
+                    Let Claude, GPT, or other AI agents control your browser. Requires downloading the MCP package.
+                </div>
+                <button class="mcp-btn" id="mcpDownload">
+                    Download MCP Package
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        WebMCP v1.0.0 • <a href="https://webmcp.tanujmittal.com" target="_blank">webmcp.tanujmittal.com</a>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+
+</html>

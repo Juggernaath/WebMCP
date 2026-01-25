@@ -1,0 +1,68 @@
+{
+    "name": "webagent-mcp",
+    "version": "1.0.0",
+    "description": "MCP server for browser automation - give AI agents the power to browse the web",
+    "type": "module",
+    "bin": {
+        "webagent-mcp": "./bin/webagent-mcp.js",
+        "webmcp": "./bin/webagent-mcp.js"
+    },
+    "main": "src/server.js",
+    "files": [
+        "bin/",
+        "src/",
+        "README.md",
+        "LICENSE"
+    ],
+    "scripts": {
+        "start": "node bin/webagent-mcp.js",
+        "dev": "node bin/webagent-mcp.js --sse --port 3000",
+        "test": "node test-webmcp.js",
+        "stress": "node stress-test.js",
+        "setup": "node bin/webagent-mcp.js setup",
+        "build": "pkg . --out-path dist --targets node18-win-x64,node18-macos-x64,node18-linux-x64"
+    },
+    "keywords": [
+        "mcp",
+        "browser",
+        "automation",
+        "ai",
+        "webagent",
+        "claude",
+        "cursor",
+        "langchain",
+        "agent",
+        "web-scraping",
+        "browser-automation"
+    ],
+    "author": "",
+    "license": "MIT",
+    "homepage": "https://github.com/Juggernaath/webmcp",
+    "bugs": {
+        "url": "https://github.com/Juggernaath/webmcp/issues"
+    },
+    "dependencies": {
+        "@modelcontextprotocol/sdk": "^1.0.0",
+        "cors": "^2.8.5",
+        "express": "^5.2.1",
+        "jimp": "^1.6.0",
+        "ws": "^8.14.0"
+    },
+    "devDependencies": {
+        "pkg": "^5.8.1"
+    },
+    "pkg": {
+        "scripts": "src/**/*.js",
+        "assets": [
+            "node_modules/**/*"
+        ],
+        "outputPath": "dist"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/Juggernaath/webmcp.git"
+    }
+}

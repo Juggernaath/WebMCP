@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+
+<body>
+    <img id="source" src="assets/icon.png" crossorigin="anonymous">
+    <canvas id="canvas"></canvas>
+    <script>
+        const img = document.getElementById('source');
+        img.onload = () => {
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = img.width;
+            canvas.height = img.height;
+
+            // Draw image
+            ctx.drawImage(img, 0, 0);
+
+            // Get pixel data
+            const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = frame.data;
+
+            // Loop through pixels
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+
+                // Calculate brightness
+                const brightness = (r + g + b) / 3;
+
+                // If dark enough, make transparent
+                // Threshold of 30 allows deep blacks/grays to vanish while keeping neon
+                if (brightness < 40) {
+                    data[i + 3] = 0; // Alpha = 0
+                }
+            }
+
+            // Put back and extract
+            ctx.putImageData(frame, 0, 0);
+
+            // Create visible element for MCP to read
+            const result = document.createElement('div');
+            result.id = 'result';
+            result.innerText = canvas.toDataURL('image/png');
+            document.body.appendChild(result);
+        };
+    </script>
+</body>
+
+</html>
