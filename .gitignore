@@ -84,3 +84,9 @@ store_assets/
 releases/
 archive/
 
+# Website & Branding
+website/
+.firebase/
+.firebaserc
+firebase.json
+
