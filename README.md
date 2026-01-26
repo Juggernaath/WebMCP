@@ -6,7 +6,7 @@ It consists of two main components:
 1. **WebMCP Extension** (`webagent-extension`): A powerful Chrome extension for recording, scraping, and managing browser tasks.
 2. **WebMCP Server** (`webagent-mcp`): An MCP (Model Context Protocol) server that allows AI agents (like Claude, Cursor, or custom LLMs) to control the browser via the extension.
 
-**🌐 Live Website:** [https://webmcp-tanuj.web.app](https://webmcp-tanuj.web.app)
+**🌐 Live Website:** [https://webmcp.tanujmittal.com](https://webmcp.tanujmittal.com)
 
 ## Project Structure
 
