@@ -4,8 +4,8 @@
     "description": "MCP server for browser automation - give AI agents the power to browse the web",
     "type": "module",
     "bin": {
-        "webagent-mcp": "./bin/webagent-mcp.js",
-        "webmcp": "./bin/webagent-mcp.js"
+        "webagent-mcp": "bin/webagent-mcp.js",
+        "webmcp": "bin/webagent-mcp.js"
     },
     "main": "src/server.js",
     "files": [
@@ -37,9 +37,13 @@
     ],
     "author": "",
     "license": "MIT",
-    "homepage": "https://github.com/Juggernaath/webmcp",
+    "homepage": "https://github.com/Juggernaath/WebMCP",
     "bugs": {
-        "url": "https://github.com/Juggernaath/webmcp/issues"
+        "url": "https://github.com/Juggernaath/WebMCP/issues"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/Juggernaath/WebMCP.git"
     },
     "dependencies": {
         "@modelcontextprotocol/sdk": "^1.0.0",
@@ -60,9 +64,5 @@
     },
     "engines": {
         "node": ">=18.0.0"
-    },
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/Juggernaath/webmcp.git"
     }
 }
