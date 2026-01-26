@@ -13,6 +13,9 @@ It consists of two main components:
 - **`webagent-extension/`**: The Chrome Extension source code.
 - **`webagent-mcp/`**: The MCP server and bridge implementation (Node.js).
 - **`webagent-vscode/`**: VS Code extension wrapper for the MCP server.
+- **`releases/`**: Downloadable extension packages (v1.0.4).
+- **`assets/`**: Branding and store listing images.
+- **`scripts/`**: Helper scripts for deployment and maintenance.
 - **`docs/`**: Integration guides and protocol documentation.
 
 ## Quick Start
