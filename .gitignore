@@ -70,11 +70,17 @@ node_modules/
 .dataconnect
 
 # Temporary Scripts
+scripts/
 resize_icons.js
 fix_assets.js
 debug_jimp.js
 
-# Temporary Assets
+# Assets & Media
+assets/
 store_assets/
 !store_assets_final/
+
+# Build Artifacts & Archives
+releases/
+archive/
 
