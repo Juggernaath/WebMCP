@@ -16,12 +16,13 @@
 
 | Directory | Purpose | Key Files |
 |-----------|---------|-----------|
-| `/webagent-mcp` | MCP server & bridges | `src/server.js`, `src/tools.js`, `src/security.js` |
+| `/webagent-mcp` | MCP server & bridges | `src/server.js`, `src/tools.js`, `src/security.js`, `src/setup.js`, `src/retry.js` |
 | `/webagent-mcp/src/bridge` | Transport layer | `extension-bridge.js`, `websocket-bridge.js` |
 | `/webagent-extension` | Chrome extension source | `background.js`, `content.js`, `manifest.json` |
 | `/webagent-sdk-js` | JavaScript SDK for web apps | `src/index.js` |
 | `/webagent-vscode` | VS Code extension wrapper | `package.json`, TypeScript source |
 | `/docs` | Documentation | `protocol.md`, `integration-guide.md`, `CHANGELOG.md` |
+| `/website` | Marketing site (deployed via Firebase) | `index.html`, `styles.css` |
 
 ## Quick-Start Commands
 

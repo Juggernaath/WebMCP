@@ -54,7 +54,7 @@ Configure your AI tool to use the WebMCP MCP server. The extension connects auto
 
 ## Permissions
 
-WebMCP requires 5 Chrome permissions:
+WebMCP requires 5 Chrome permissions and 1 host permission:
 
 | Permission | Why |
 |------------|-----|
@@ -63,5 +63,6 @@ WebMCP requires 5 Chrome permissions:
 | `storage` | Settings persistence |
 | `tabs` | Tab management and messaging |
 | `cookies` | Session management for automation |
+| `<all_urls>` (host) | Content script injection on any page for DOM automation |
 
 **Website:** [webmcp.tanujmittal.com](https://webmcp.tanujmittal.com)

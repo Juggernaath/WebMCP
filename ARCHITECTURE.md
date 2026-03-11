@@ -94,7 +94,7 @@ TIER 2: Remote MCP Agent Control
    - Send via WebSocketBridge.execute()
 
 5. WebSocketBridge sends message over WebSocket
-   { type: 'request', id: uuid, action: 'click', params: { ref: 5 } }
+   { requestId: 'req_1234_abc', action: 'click', params: { ref: 5 } }
    Extension receives on ws.onmessage
 
 6. Extension Background receives message
@@ -107,7 +107,7 @@ TIER 2: Remote MCP Agent Control
    { success: true, result: { clicked: true } }
 
 9. Background routes response back to WebSocket
-   { type: 'response', id: uuid, result: { clicked: true } }
+   { requestId: 'req_1234_abc', success: true, result: { clicked: true } }
 
 10. MCP Server receives response over WebSocket
     ExtensionBridge awaits promise, returns result
@@ -144,7 +144,6 @@ Same WebSocket connection is bidirectional. Responses match request IDs for corr
 | `express` | ^5.2.1 | webagent-mcp | SSE server, routing |
 | `ws` | ^8.14.0 | webagent-mcp | WebSocket bridge |
 | `cors` | ^2.8.5 | webagent-mcp | SSE cross-origin support |
-| `jimp` | ^1.6.0 | webagent-mcp | Image processing (screenshots) |
 | `pkg` | ^5.8.1 | webagent-mcp (dev) | Build executables |
 | `typescript` | ^5.1.3 | webagent-vscode (dev) | VS Code extension compilation |
 | `@types/vscode` | ^1.80.0 | webagent-vscode (dev) | VS Code API types |
@@ -180,7 +179,7 @@ Requests are matched to responses by `requestId`. Pending requests are tracked i
 
 1. **Startup:** MCP server starts WebSocketBridge on port 8080
 2. **Extension Load:** Extension loads, initiates WebSocket connection to `ws://localhost:8080`
-3. **Handshake:** Extension sends `{ type: 'register' }` to prove identity
+3. **Handshake:** Server sends `{ type: 'handshake', version: '1.0.0', clientId }` to the connecting extension; extension logs receipt and considers connection established
 4. **Active:** Extension maintains connection, listens for incoming requests
 5. **Request:** MCP requests routed over this connection
 6. **Disconnect:** If connection lost, MCP retries with backoff; extension auto-reconnects
