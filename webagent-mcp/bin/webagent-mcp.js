@@ -73,7 +73,7 @@ USAGE:
 
 COMMANDS:
     serve       Start the MCP server (default)
-    setup       Auto-configure for Claude Desktop and register native messaging host
+    setup       Auto-configure for Claude Desktop
 
 OPTIONS:
     --sse           Use SSE transport instead of stdio
@@ -86,7 +86,7 @@ EXAMPLES:
     webagent-mcp --sse --port 3001  Start SSE server on port 3001
     webagent-mcp setup              Configure for Claude Desktop
 
-For more information, visit: https://webagent.dev
+For more information, visit: https://webmcp.tanujmittal.com
 `);
 }
 

@@ -5,7 +5,7 @@
  * Routes messages between apps and content scripts.
  * 
  * Tier 1: Web apps communicate via chrome.runtime.sendMessage
- * Tier 2: MCP clients communicate via WebSocket / native messaging
+ * Tier 2: MCP clients communicate via WebSocket
  */
 
 // =============================================================================
@@ -19,9 +19,6 @@ let config = {
     debug: true
 };
 
-// Native messaging port for MCP bridge (Tier 2)
-let mcpPort = null;
-
 // Load config from storage on startup
 chrome.storage.local.get(['webmcpConfig'], (result) => {
     if (result.webmcpConfig) {
@@ -32,6 +29,29 @@ chrome.storage.local.get(['webmcpConfig'], (result) => {
 
 // Track active sessions (tabId -> appId)
 const activeSessions = new Map();
+
+// Ref→selector cache from most recent page.read (per tab)
+// Used as fallback when content script's in-memory Map is stale
+const refCache = new Map(); // tabId -> { refs: { ref: selector } }
+
+// Port-based content script connections (tabId -> port)
+// More reliable than chrome.tabs.sendMessage which hits bfcache errors
+const contentPorts = new Map();
+
+// Listen for content script port connections
+chrome.runtime.onConnect.addListener((port) => {
+    if (port.name !== 'webmcp-content') return;
+    const tabId = port.sender?.tab?.id;
+    if (!tabId) return;
+
+    console.log(`[WebMCP] Content script connected via port (tab ${tabId})`);
+    contentPorts.set(tabId, port);
+
+    port.onDisconnect.addListener(() => {
+        console.log(`[WebMCP] Content script port disconnected (tab ${tabId})`);
+        contentPorts.delete(tabId);
+    });
+});
 
 // =============================================================================
 // MESSAGE ROUTING
@@ -105,47 +125,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             wsConnection.close();
             wsConnection = null;
         }
-        // Disconnect native messaging
-        if (mcpPort) {
-            mcpPort.disconnect();
-            mcpPort = null;
+        clearReconnectTimer();
+        sendResponse({ success: true });
+        return true;
+    }
+
+    if (request.action === 'reconnect') {
+        // Force reconnect to WebSocket bridge
+        if (wsConnection) {
+            wsConnection.close();
+            wsConnection = null;
         }
         clearReconnectTimer();
-        isRecording = false;
+        connectToWebSocketBridge();
         sendResponse({ success: true });
         return true;
     }
 
-    // =========================================================================
-    // RECORDING
-    // =========================================================================
-
-    if (request.action === 'startRecording') {
-        startRecording();
+    if (request.action === 'clearActivity') {
+        activityLog.length = 0;
         sendResponse({ success: true });
-        return true;
-    }
-
-    if (request.action === 'stopRecording') {
-        stopRecording();
-        sendResponse({ success: true });
-        return true;
-    }
-
-    if (request.action === 'playTask') {
-        playTask(request.task);
-        sendResponse({ success: true });
-        return true;
-    }
-
-    // =========================================================================
-    // SCRAPING
-    // =========================================================================
-
-    if (request.action === 'scrape') {
-        handleScrape(request.type)
-            .then(data => sendResponse({ data }))
-            .catch(error => sendResponse({ error: error.message }));
         return true;
     }
 
@@ -185,6 +184,12 @@ async function handleRequest(request, sender) {
             case 'wait':
                 result = await handleWait(params);
                 break;
+            case 'back':
+                result = await handleBack(params);
+                break;
+            case 'forward':
+                result = await handleForward(params);
+                break;
             case 'refresh':
                 result = await handleRefresh(params);
                 break;
@@ -210,7 +215,10 @@ async function handleRequest(request, sender) {
             case 'getText':
             case 'getAttribute':
             case 'waitForElement':
-            case 'evaluate':
+            // v1.1.0: New content-delegated actions
+            case 'findElement':
+            case 'getPageText':
+            case 'highlightElement':
                 result = await delegateToContent(action, params, context);
                 break;
 
@@ -229,9 +237,6 @@ async function handleRequest(request, sender) {
             case 'screenshot':
                 result = await handleScreenshot(params);
                 break;
-            case 'download':
-                result = await handleDownload(params);
-                break;
             case 'cookies.get':
                 result = await handleCookiesGet(params);
                 break;
@@ -246,6 +251,9 @@ async function handleRequest(request, sender) {
                 break;
             case 'tabs.close':
                 result = await handleTabsClose(params);
+                break;
+            case 'tabs.switch':
+                result = await handleTabsSwitch(params);
                 break;
             case 'waitForNavigation':
                 result = await handleWaitForNavigation(params);
@@ -263,7 +271,7 @@ async function handleRequest(request, sender) {
                 break;
             case 'config.setBlockedDomains':
                 config.blockedDomains = params.domains || [];
-                await chrome.storage.local.set({ webagentConfig: config });
+                await chrome.storage.local.set({ webmcpConfig: config });
                 result = { updated: true };
                 break;
             case 'app.register':
@@ -305,12 +313,13 @@ async function handleNavigate(params) {
     const targetTabId = tabId || (await getActiveTabId());
     await chrome.tabs.update(targetTabId, { url });
 
-    // Wait for load
+    // Wait for load + content script initialization
     return new Promise((resolve) => {
         const listener = (updatedTabId, changeInfo) => {
             if (updatedTabId === targetTabId && changeInfo.status === 'complete') {
                 chrome.tabs.onUpdated.removeListener(listener);
-                resolve({ navigated: true, url });
+                // Small delay to ensure content script (document_idle) has initialized
+                setTimeout(() => resolve({ navigated: true, url }), 150);
             }
         };
         chrome.tabs.onUpdated.addListener(listener);
@@ -321,6 +330,21 @@ async function handleWait(params) {
     const { ms = 1000 } = params;
     await new Promise(resolve => setTimeout(resolve, ms));
     return { waited: ms };
+}
+
+async function handleBack(params) {
+    const tabId = params.tabId || (await getActiveTabId());
+    await chrome.tabs.goBack(tabId);
+    // Brief wait for navigation to start
+    await new Promise(r => setTimeout(r, 500));
+    return { back: true };
+}
+
+async function handleForward(params) {
+    const tabId = params.tabId || (await getActiveTabId());
+    await chrome.tabs.goForward(tabId);
+    await new Promise(r => setTimeout(r, 500));
+    return { forward: true };
 }
 
 async function handleRefresh(params) {
@@ -349,6 +373,17 @@ async function handlePageRead(params) {
         action: 'getPageContent'
     });
 
+    // Cache ref→selector mapping in background for fallback
+    if (pageContent && pageContent.elements) {
+        const refs = {};
+        for (const el of pageContent.elements) {
+            if (el.ref && el.selector) {
+                refs[el.ref] = el.selector;
+            }
+        }
+        refCache.set(tabId, { refs, url: tab.url });
+    }
+
     return {
         url: tab.url,
         title: tab.title,
@@ -359,11 +394,30 @@ async function handlePageRead(params) {
 async function delegateToContent(action, params, context) {
     const tabId = params.tabId || (await getActiveTabId());
 
-    return await sendToContentScript(tabId, {
+    const result = await sendToContentScript(tabId, {
         action,
         params,
         context
     });
+
+    // If ref-based action failed with "not found or stale", retry with cached selector
+    if (result && result.success === false && result.error &&
+        result.error.includes('not found or stale') &&
+        params.ref !== undefined) {
+        const cached = refCache.get(tabId);
+        if (cached && cached.refs[params.ref]) {
+            console.log(`[WebMCP] Ref ${params.ref} stale, retrying with cached selector: ${cached.refs[params.ref]}`);
+            const fallbackParams = { ...params, selector: cached.refs[params.ref] };
+            delete fallbackParams.ref; // Use selector instead
+            return await sendToContentScript(tabId, {
+                action,
+                params: fallbackParams,
+                context
+            });
+        }
+    }
+
+    return result;
 }
 
 // =============================================================================
@@ -374,24 +428,20 @@ async function handleScreenshot(params) {
     const { format = 'png', quality = 90 } = params;
     const tabId = params.tabId || (await getActiveTabId());
 
-    const dataUrl = await chrome.tabs.captureVisibleTab(null, {
-        format: format,
-        quality: quality
-    });
-
-    return { dataUrl, format };
-}
-
-async function handleDownload(params) {
-    const { url, filename, saveAs = false } = params;
-
-    const downloadId = await chrome.downloads.download({
-        url: url,
-        filename: filename,
-        saveAs: saveAs
-    });
-
-    return { downloadId, started: true };
+    try {
+        const dataUrl = await chrome.tabs.captureVisibleTab(null, {
+            format: format,
+            quality: quality
+        });
+        return { dataUrl, format };
+    } catch (err) {
+        // Chrome's captureVisibleTab requires the browser window to be visible
+        // and in the foreground. If minimized or occluded, image readback fails.
+        if (err.message && err.message.includes('image readback failed')) {
+            throw new Error('Failed to capture screenshot: Chrome window must be visible and in the foreground. Use web_read_page for background automation.');
+        }
+        throw err;
+    }
 }
 
 async function handleCookiesGet(params) {
@@ -448,6 +498,14 @@ async function handleTabsClose(params) {
     return { closed: true };
 }
 
+async function handleTabsSwitch(params) {
+    const { tabId } = params;
+    if (!tabId) throw new Error('tabId is required for tabs.switch');
+    await chrome.tabs.update(tabId, { active: true });
+    const tab = await chrome.tabs.get(tabId);
+    return { switched: true, tabId, url: tab.url, title: tab.title };
+}
+
 async function handleWaitForNavigation(params) {
     const { timeout = 30000 } = params;
     const tabId = params.tabId || (await getActiveTabId());
@@ -471,7 +529,7 @@ async function handleWaitForNavigation(params) {
 }
 
 // =============================================================================
-// TIER 2 BRIDGE (WebSocket + Native Messaging)
+// TIER 2 BRIDGE (WebSocket)
 // =============================================================================
 
 const WS_PORT = 8080;  // Default WebSocket port for MCP bridge
@@ -566,55 +624,23 @@ function clearReconnectTimer() {
     }
 }
 
-/**
- * Connect to native MCP bridge (legacy/fallback)
- * Only used if WebSocket fails - safe to ignore errors
- */
-function connectToNativeBridge() {
-    // Skip if WebSocket is already connected
-    if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
-        return;
-    }
-
-    try {
-        mcpPort = chrome.runtime.connectNative('com.webagent.mcp');
-
-        mcpPort.onMessage.addListener((message) => {
-            console.log('[Webagent] Native MCP message:', message);
-            handleNativeMessage(message);
-        });
-
-        mcpPort.onDisconnect.addListener(() => {
-            // Silently ignore - this is expected if native host isn't set up
-            mcpPort = null;
-        });
-
-        console.log('[Webagent] Connected to native MCP bridge');
-    } catch (error) {
-        // Silently ignore - native messaging is optional fallback
-    }
-}
-
-async function handleNativeMessage(message) {
-    const { requestId, action, params, context } = message;
-
-    try {
-        const result = await handleRequest({ requestId, action, params, context }, { origin: 'mcp-native' });
-        mcpPort?.postMessage(result);
-    } catch (error) {
-        mcpPort?.postMessage({
-            requestId,
-            success: false,
-            error: { code: 'ACTION_FAILED', message: error.message }
-        });
-    }
-}
-
 // Initialize Tier 2 connections on startup
 setTimeout(() => {
-    connectToWebSocketBridge();  // Primary: WebSocket
-    connectToNativeBridge();      // Fallback: Native messaging
+    connectToWebSocketBridge();
 }, 1000);
+
+// MV3 Keep-Alive: Service workers get terminated after ~30s of inactivity.
+// Use chrome.alarms to periodically wake the worker and maintain WebSocket.
+chrome.alarms.create('keepAlive', { periodInMinutes: 0.4 }); // Every 24 seconds
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === 'keepAlive') {
+        if (!wsConnection || wsConnection.readyState !== WebSocket.OPEN) {
+            console.log('[WebMCP] Keep-alive: reconnecting WebSocket...');
+            connectToWebSocketBridge();
+        }
+    }
+});
 
 async function handleAppRegister(params, sender) {
     const { appId, name } = params;
@@ -626,7 +652,7 @@ async function handleAppRegister(params, sender) {
         registeredAt: Date.now()
     };
 
-    await chrome.storage.local.set({ webagentConfig: config });
+    await chrome.storage.local.set({ webmcpConfig: config });
 
     console.log(`[Webagent] App registered: ${appId} from ${origin}`);
     return { registered: true, appId };
@@ -688,11 +714,115 @@ async function handleContentMessage(request, sender) {
     }
 }
 
-async function sendToContentScript(tabId, message) {
+/**
+ * Send a message to a content script via its persistent port.
+ * Uses request-response correlation via _msgId so multiple in-flight messages
+ * on the same port do not collide.
+ *
+ * @param {chrome.runtime.Port} port - The port returned by chrome.runtime.onConnect
+ * @param {object} message - The action message to send
+ * @param {number} [timeout=15000] - Max ms to wait for a response
+ * @returns {Promise<any>} Resolves with the result from the content script
+ */
+function sendViaPort(port, message, timeout = 15000) {
+    return new Promise((resolve, reject) => {
+        const msgId = Math.random().toString(36).substring(2, 10);
+
+        function cleanup() {
+            clearTimeout(timer);
+            port.onMessage.removeListener(listener);
+            try { port.onDisconnect.removeListener(onDisconnect); } catch (_) {}
+        }
+
+        const timer = setTimeout(() => {
+            cleanup();
+            reject(new Error('Port message timeout'));
+        }, timeout);
+
+        const listener = (response) => {
+            if (response._msgId === msgId) {
+                cleanup();
+                if (response.error) {
+                    reject(new Error(response.error));
+                } else {
+                    resolve(response.result);
+                }
+            }
+        };
+
+        // If the port disconnects while waiting (e.g. a click caused navigation
+        // and the content script was torn down), treat it as a success rather
+        // than hanging until the timeout fires.  Return an action-appropriate
+        // default result so callers see the expected response shape.
+        const onDisconnect = () => {
+            cleanup();
+            const action = message.action || '';
+            console.log(`[WebMCP] Port disconnected during pending message (action: ${action}) — assuming action succeeded`);
+            const defaults = {
+                click:            { clicked: true },
+                type:             { typed: true, length: 0 },
+                hover:            { hovered: true },
+                scroll:           { scrolled: true, direction: 'down', amount: 0 },
+                press_key:        { pressed: (message.params && message.params.key) || '' },
+                highlightElement: { highlighted: true, duration: 0 },
+            };
+            resolve(defaults[action] || { success: true });
+        };
+
+        port.onMessage.addListener(listener);
+        port.onDisconnect.addListener(onDisconnect);
+        port.postMessage({ ...message, _msgId: msgId });
+    });
+}
+
+/**
+ * Send a message to the content script running in the given tab.
+ * Primary path uses the persistent port registered via chrome.runtime.onConnect
+ * (avoids bfcache "page moved into back/forward cache" errors).
+ * Falls back to chrome.tabs.sendMessage if no port is available, with a
+ * one-time tab-reload retry on bfcache / "Receiving end does not exist" errors.
+ *
+ * @param {number} tabId - Target tab
+ * @param {object} message - Action message
+ * @param {boolean} [retried=false] - Internal flag to prevent infinite reload loops
+ * @returns {Promise<any>}
+ */
+async function sendToContentScript(tabId, message, retried = false) {
+    // Try port-based messaging first (avoids bfcache issues)
+    const port = contentPorts.get(tabId);
+    if (port) {
+        try {
+            return await sendViaPort(port, message);
+        } catch (portErr) {
+            console.log(`[WebMCP] Port message failed (${portErr.message}), falling back to sendMessage`);
+            contentPorts.delete(tabId);
+            // Fall through to chrome.tabs.sendMessage
+        }
+    }
+
+    // Fallback: chrome.tabs.sendMessage
     return new Promise((resolve, reject) => {
         chrome.tabs.sendMessage(tabId, message, response => {
             if (chrome.runtime.lastError) {
-                reject(new Error(chrome.runtime.lastError.message));
+                const errMsg = chrome.runtime.lastError.message || '';
+                if (!retried && (errMsg.includes('back/forward cache') || errMsg.includes('Receiving end does not exist'))) {
+                    console.log('[WebMCP] Content script port lost, reloading tab and retrying...');
+                    chrome.tabs.reload(tabId, {}, () => {
+                        const listener = (updatedTabId, changeInfo) => {
+                            if (updatedTabId === tabId && changeInfo.status === 'complete') {
+                                chrome.tabs.onUpdated.removeListener(listener);
+                                setTimeout(() => {
+                                    sendToContentScript(tabId, message, true)
+                                        .then(resolve)
+                                        .catch(reject);
+                                }, 300);
+                            }
+                        };
+                        chrome.tabs.onUpdated.addListener(listener);
+                    });
+                } else {
+                    reject(new Error(errMsg));
+                }
             } else {
                 resolve(response);
             }
@@ -704,220 +834,6 @@ async function getActiveTabId() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab) throw new Error('No active tab');
     return tab.id;
-}
-
-// =============================================================================
-// RECORDING ENGINE
-// =============================================================================
-
-let isRecording = false;
-let recordingTabId = null;
-let debuggerAttached = false;
-let consoleMessages = [];
-let networkRequests = [];
-
-function startRecording() {
-    isRecording = true;
-    consoleMessages = [];
-    networkRequests = [];
-
-    // Get current tab
-    chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
-        if (!tabs[0]) return;
-        recordingTabId = tabs[0].id;
-
-        // Attach debugger for console/network capture
-        try {
-            await chrome.debugger.attach({ tabId: recordingTabId }, '1.3');
-            debuggerAttached = true;
-
-            // Enable network and console domains
-            await chrome.debugger.sendCommand({ tabId: recordingTabId }, 'Network.enable');
-            await chrome.debugger.sendCommand({ tabId: recordingTabId }, 'Console.enable');
-            await chrome.debugger.sendCommand({ tabId: recordingTabId }, 'Runtime.enable');
-
-            console.log('[WebMCP] Debugger attached for recording');
-        } catch (error) {
-            console.log('[WebMCP] Could not attach debugger:', error.message);
-        }
-
-        // Notify content script to start capturing DOM events
-        chrome.tabs.sendMessage(recordingTabId, { action: 'startRecording' });
-    });
-}
-
-function stopRecording() {
-    isRecording = false;
-
-    // Detach debugger
-    if (debuggerAttached && recordingTabId) {
-        chrome.debugger.detach({ tabId: recordingTabId }).catch(() => { });
-        debuggerAttached = false;
-    }
-
-    // Notify content script to stop capturing
-    if (recordingTabId) {
-        chrome.tabs.sendMessage(recordingTabId, { action: 'stopRecording' });
-    }
-
-    recordingTabId = null;
-    console.log('[WebMCP] Recording stopped');
-}
-
-// Handle debugger events
-chrome.debugger.onEvent.addListener((source, method, params) => {
-    if (!isRecording || source.tabId !== recordingTabId) return;
-
-    // Capture console messages
-    if (method === 'Console.messageAdded') {
-        consoleMessages.push({
-            type: params.message.level,
-            text: params.message.text,
-            timestamp: Date.now()
-        });
-    }
-
-    // Capture network requests
-    if (method === 'Network.requestWillBeSent') {
-        networkRequests.push({
-            id: params.requestId,
-            url: params.request.url,
-            method: params.request.method,
-            timestamp: params.timestamp,
-            type: params.type
-        });
-    }
-
-    if (method === 'Network.responseReceived') {
-        const req = networkRequests.find(r => r.id === params.requestId);
-        if (req) {
-            req.status = params.response.status;
-            req.mimeType = params.response.mimeType;
-        }
-    }
-});
-
-// =============================================================================
-// TASK PLAYBACK
-// =============================================================================
-
-async function playTask(task) {
-    if (!task || !task.actions) return;
-
-    console.log('[WebMCP] Playing task:', task.name);
-    logActivity('playTask', { name: task.name }, true, 'extension');
-
-    for (const action of task.actions) {
-        try {
-            await executeRecordedAction(action);
-
-            // Human-like delay between actions
-            if (config.humanDelays) {
-                await sleep(300 + Math.random() * 200);
-            }
-        } catch (error) {
-            console.error('[WebMCP] Playback error:', error);
-            logActivity(action.type, action, false, 'playback');
-        }
-    }
-
-    console.log('[WebMCP] Task playback complete');
-}
-
-async function executeRecordedAction(action) {
-    const tabId = await getActiveTabId();
-
-    switch (action.type) {
-        case 'navigate':
-            await chrome.tabs.update(tabId, { url: action.url });
-            await waitForNavigation(tabId);
-            break;
-
-        case 'click':
-            await sendToContentScript(tabId, {
-                action: 'click',
-                params: { selector: action.selector }
-            });
-            break;
-
-        case 'type':
-            await sendToContentScript(tabId, {
-                action: 'type',
-                params: { selector: action.selector, text: action.text }
-            });
-            break;
-
-        case 'select':
-            await sendToContentScript(tabId, {
-                action: 'select',
-                params: { selector: action.selector, value: action.value }
-            });
-            break;
-
-        case 'scroll':
-            await sendToContentScript(tabId, {
-                action: 'scroll',
-                params: { direction: action.direction, amount: action.amount }
-            });
-            break;
-
-        default:
-            console.log('[WebMCP] Unknown action type:', action.type);
-    }
-
-    logActivity(action.type, action, true, 'playback');
-}
-
-async function waitForNavigation(tabId, timeout = 30000) {
-    return new Promise((resolve, reject) => {
-        const startTime = Date.now();
-
-        const listener = (updatedTabId, changeInfo) => {
-            if (updatedTabId === tabId && changeInfo.status === 'complete') {
-                chrome.tabs.onUpdated.removeListener(listener);
-                resolve();
-            }
-        };
-
-        chrome.tabs.onUpdated.addListener(listener);
-
-        setTimeout(() => {
-            chrome.tabs.onUpdated.removeListener(listener);
-            reject(new Error('Navigation timeout'));
-        }, timeout);
-    });
-}
-
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-// =============================================================================
-// SCRAPING HANDLERS
-// =============================================================================
-
-async function handleScrape(type) {
-    const tabId = await getActiveTabId();
-
-    switch (type) {
-        case 'text':
-            return await sendToContentScript(tabId, { action: 'scrapeText' });
-
-        case 'tables':
-            return await sendToContentScript(tabId, { action: 'scrapeTables' });
-
-        case 'links':
-            return await sendToContentScript(tabId, { action: 'scrapeLinks' });
-
-        case 'console':
-            return consoleMessages.slice(-100);
-
-        case 'network':
-            return networkRequests.slice(-100);
-
-        default:
-            throw new Error(`Unknown scrape type: ${type}`);
-    }
 }
 
 // =============================================================================

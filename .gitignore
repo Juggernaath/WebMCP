@@ -90,3 +90,20 @@ website/
 .firebaserc
 firebase.json
 
+# Claude Code
+.claude/
+
+# Dev/Test files
+test-v110.js
+test-v110-results.js
+tests/
+nul
+
+# Root dev dependencies (serve)
+package.json
+package-lock.json
+
+# Screenshots
+*.png
+!webagent-extension/icons/*.png
+

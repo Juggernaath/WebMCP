@@ -18,6 +18,7 @@ import {
 import { tools, handleToolCall } from './tools.js';
 import { ExtensionBridge } from './bridge/extension-bridge.js';
 import { securityManager } from './security.js';
+import { RATE_LIMIT, SECURITY, FEATURES } from './config.js';
 
 let extensionBridge = null;
 let app = null;
@@ -26,7 +27,15 @@ export async function startServer(options = {}) {
     const { transport = 'stdio', port = 3000 } = options;
 
     console.error(`[webagent-mcp] Starting server (${transport} mode)...`);
-    console.error('[webagent-mcp] Version: 1.0.0');
+    console.error('[webagent-mcp] Version: 1.1.0');
+
+    // Apply environment config to security manager
+    securityManager.updateConfig({
+        maxActionsPerMinute: RATE_LIMIT.actionsPerMinute,
+        blockedDomains: SECURITY.blockedPatterns,
+        allowedDomains: SECURITY.allowedDomains,
+        logActions: SECURITY.enableAuditLog,
+    });
 
     // Initialize extension bridge
     extensionBridge = new ExtensionBridge();
@@ -36,7 +45,7 @@ export async function startServer(options = {}) {
     const server = new Server(
         {
             name: 'webagent',
-            version: '1.0.0',
+            version: '1.1.0',
         },
         {
             capabilities: {

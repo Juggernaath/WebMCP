@@ -1,30 +1,45 @@
 # WebMCP Browser Extension
 
-The core component of the WebMCP platform. This Chrome extension enables:
-
-- **Recording**: Capture user interactions (clicks, types, formatting) and save them as tasks.
-- **Scraping**: Extract text, tables, links, and logs from any page.
-- **Playback**: Replay saved tasks automatically with human-like delays.
-- **AI Integration**: Acts as the bridge for the WebMCP server to control the browser.
+Chrome extension for AI browser automation via the Model Context Protocol (MCP). Your browser, your data.
 
 ## Installation
 
-1. Clone or download this repository.
-2. Open Chrome and navigate to `chrome://extensions`.
-3. Enable **Developer mode** (top right).
-4. Click **Load unpacked**.
-5. Select this `webagent-extension` folder.
+1. Open Chrome and navigate to `chrome://extensions`
+2. Enable **Developer mode** (top right)
+3. Click **Load unpacked**
+4. Select this `webagent-extension` folder
 
-## Features
+## What It Does
 
-### Popup UI
-- **Record**: Start/stop recording. Visual indicator of captured actions.
-- **Tasks**: Manage saved tasks. Play, export, or delete them.
-- **Scrape**: One-click extraction of data to clipboard/JSON.
-- **Activity**: Live log of all automation events.
-- **Settings**: Toggle logs, blocking, and AI features.
+Connects AI agents to your real browser session over a local WebSocket bridge. Agents send MCP tool calls; the extension executes them in the active tab.
 
-### Permissions
-- `debugger`: Required for capturing console logs and network requests.
-- `webRequest`: Required for analyzing network traffic.
-- `nativeMessaging`: Required for communicating with the MCP server (if installed).
+- **Navigate**: Go to URLs, back/forward, refresh
+- **Read**: Accessibility tree with element refs, text extraction, screenshots
+- **Interact**: Click, type, scroll, hover, press keys (by selector, text, or ref)
+- **Forms**: Analyze and auto-fill forms, upload files
+- **Tabs**: List, create, close, switch between tabs
+
+## Popup UI (3 tabs)
+
+- **Status**: Connection indicator, session info, kill switch
+- **Activity**: Scrollable log of all automation actions
+- **Settings**: Human-like delays toggle, logging toggle, reconnect
+
+## Permissions (5)
+
+| Permission | Why |
+|---|---|
+| `activeTab` | Screenshot capture via `captureVisibleTab` |
+| `alarms` | Keep MV3 service worker alive for WebSocket |
+| `storage` | Persist user settings across sessions |
+| `tabs` | Tab management, navigation, messaging |
+| `cookies` | Session management for authenticated workflows |
+
+See `PERMISSIONS.md` for detailed justifications with code references.
+
+## Privacy
+
+- All communication is local (`localhost` WebSocket, port 8080)
+- No data sent to any remote server
+- No analytics or tracking
+- Password fields are masked as `[filled]` in page reads

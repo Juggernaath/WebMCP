@@ -21,9 +21,9 @@ Or copy the SDK to your project.
 ### 3. Initialize Client
 
 ```javascript
-import { WebMCPClient } from '@webmcp/sdk';
+import { WebagentClient } from './webagent-sdk-js/src/index.js';
 
-const webmcp = new WebMCPClient({
+const webmcp = new WebagentClient({
     extensionId: 'your-extension-id',  // Get from chrome://extensions
     appId: 'my-app',
     debug: true
@@ -53,12 +53,29 @@ await webmcp.fillForm({
 await webmcp.click('#submit-btn');
 ```
 
+### 5. Use Element References (v1.1.0)
+
+```javascript
+// Read page to get element references
+const page = await webmcp.readPage();
+console.log('Elements:', page.elements.length);
+
+// Find a specific element
+const signIn = page.elements.find(el => el.name === 'Sign In');
+console.log('Sign In ref:', signIn.ref);
+
+// Click using ref (more reliable than CSS selector)
+await webmcp.click({ ref: signIn.ref });
+```
+
+**Why use refs?** Element references are more reliable than CSS selectors on dynamic pages. The accessibility tree is generated fresh on each page read and uses integer refs that persist for the entire page state.
+
 ## Job Application Example
 
 ```javascript
-import { WebMCPClient } from '@webmcp/sdk';
+import { WebagentClient } from './webagent-sdk-js/src/index.js';
 
-const webmcp = new WebMCPClient({ appId: 'my-job-app' });
+const webmcp = new WebagentClient({ appId: 'my-job-app' });
 
 async function applyToJob(jobUrl, userProfile, resumeUrl) {
     // Navigate to job
@@ -88,6 +105,13 @@ async function applyToJob(jobUrl, userProfile, resumeUrl) {
     await webmcp.click('#submit-btn');
 }
 ```
+
+## Deprecated Features (v1.1.0)
+
+The following features have been removed in v1.1.0:
+
+- **Recording** — Debugger-based action recording is no longer available. For automation workflows, use the MCP tools directly.
+- **Scraping** — `scrapeText()`, `scrapeTables()`, `scrapeLinks()` have been removed. Use `web_get_page_text` instead, or parse the accessibility tree from `web_read_page`.
 
 ## Error Handling
 
@@ -123,6 +147,15 @@ if (page.captcha?.detected) {
     console.log('CAPTCHA solved, continuing...');
 }
 ```
+
+## Known Limitations
+
+| Limitation | Affected Tool | Workaround |
+|---|---|---|
+| Screenshots require Chrome to be visible and in the foreground | `web_screenshot` | Use `web_read_page` for page understanding — the accessibility tree works regardless of window visibility |
+| CAPTCHA cannot be solved automatically | All navigation | Use the Human-in-Loop flow above |
+
+All other tools (`web_navigate`, `web_click`, `web_type`, `web_read_page`, `web_find_element`, etc.) work whether Chrome is in the foreground or background.
 
 ## Finding Extension ID
 

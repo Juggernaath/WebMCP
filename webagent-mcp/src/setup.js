@@ -21,15 +21,11 @@ export async function runSetup() {
     // Step 1: Check for Claude Desktop
     const claudeConfigured = await setupClaudeDesktop();
 
-    // Step 2: Register native messaging host
-    const nativeHostRegistered = await registerNativeHost();
-
     // Summary
     console.log('');
     console.log('='.repeat(40));
     console.log('Setup Summary:');
     console.log(`  Claude Desktop: ${claudeConfigured ? '✅ Configured' : '⚠️  Not found'}`);
-    console.log(`  Native Host:    ${nativeHostRegistered ? '✅ Registered' : '⚠️  Skipped'}`);
     console.log('');
 
     if (claudeConfigured) {
@@ -95,32 +91,6 @@ async function setupClaudeDesktop() {
         console.log(`   ❌ Error: ${error.message}`);
         return false;
     }
-}
-
-async function registerNativeHost() {
-    // Native host registration is platform-specific
-    // For now, just log instructions
-
-    console.log('');
-    console.log('📦 Native Messaging Host');
-    console.log('   (Required for Chrome extension communication)');
-
-    const plat = platform();
-
-    if (plat === 'win32') {
-        console.log('   Windows: Registry entry needed');
-        console.log('   Run as admin: webagent-mcp register-native-host');
-    } else if (plat === 'darwin') {
-        console.log('   macOS: Installing to ~/Library/Application Support/Google/Chrome/NativeMessagingHosts/');
-    } else {
-        console.log('   Linux: Installing to ~/.config/google-chrome/NativeMessagingHosts/');
-    }
-
-    // TODO: Actually create the native messaging host manifest
-    console.log('   ⚠️  Native host registration not yet implemented');
-    console.log('   (Extension will work in mock mode for testing)');
-
-    return false;
 }
 
 function getClaudeConfigPath() {

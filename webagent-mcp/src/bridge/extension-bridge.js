@@ -117,17 +117,13 @@ export class ExtensionBridge extends EventEmitter {
             case 'page.read':
                 return {
                     url: 'https://example.com',
-                    title: 'Example Page (Mock)',
-                    html: '<html><body><h1>Mock Page</h1></body></html>',
+                    title: 'Mock Page',
+                    elements: [
+                        { ref: 1, role: 'link', name: 'Example Link', visible: true, selector: 'a' },
+                        { ref: 2, role: 'textbox', name: 'Search', visible: true, selector: 'input[type="text"]' },
+                        { ref: 3, role: 'button', name: 'Submit', visible: true, selector: 'button' }
+                    ],
                     forms: [],
-                    buttons: [
-                        { index: 0, text: 'Submit', type: 'submit', id: 'submit-btn' },
-                        { index: 1, text: 'Cancel', type: 'button', id: 'cancel-btn' },
-                    ],
-                    inputs: [
-                        { index: 0, type: 'text', name: 'email', label: 'Email', id: 'email' },
-                        { index: 1, type: 'password', name: 'password', label: 'Password', id: 'password' },
-                    ],
                     captcha: { detected: false },
                 };
 
@@ -194,7 +190,7 @@ export class ExtensionBridge extends EventEmitter {
                 return { uploaded: true, fileName: params.filename };
 
             case 'ping':
-                return { pong: true, version: '1.0.0', mock: true };
+                return { pong: true, version: '1.1.0', mock: true };
 
             default:
                 console.error(`[ExtensionBridge] Unknown action: ${action}`);

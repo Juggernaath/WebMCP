@@ -5,8 +5,6 @@
  * Detects CAPTCHAs and reports to background.
  */
 
-console.log('[Webagent] Content script loaded:', window.location.href);
-
 // =============================================================================
 // CONFIGURATION
 // =============================================================================
@@ -14,9 +12,150 @@ console.log('[Webagent] Content script loaded:', window.location.href);
 const FILL_DELAY = 300;  // Delay between actions (human-like)
 
 // =============================================================================
+// ELEMENT REFERENCE SYSTEM
+// =============================================================================
+
+// Map of integer refs to DOM elements — persists across actions within a page
+let elementRefMap = new Map();
+let nextRef = 1;
+
+// Backup ref→selector mapping key in sessionStorage
+// Survives content script re-injection on the same page
+const REF_STORAGE_KEY = '__webmcp_refs__';
+
+/**
+ * Reset refs when page changes
+ */
+function resetRefs() {
+    elementRefMap.clear();
+    nextRef = 1;
+}
+
+/**
+ * Persist ref→selector mapping to sessionStorage as fallback
+ */
+function persistRefs() {
+    try {
+        const mapping = {};
+        for (const [ref, el] of elementRefMap) {
+            const selector = getUniqueSelector(el);
+            if (selector) mapping[ref] = selector;
+        }
+        sessionStorage.setItem(REF_STORAGE_KEY, JSON.stringify(mapping));
+    } catch (e) {
+        // sessionStorage might not be available (e.g., file:// URLs)
+    }
+}
+
+/**
+ * Assign a ref to an element and store it
+ */
+function assignRef(element) {
+    // Check if element already has a ref
+    for (const [ref, el] of elementRefMap) {
+        if (el === element) return ref;
+    }
+    const ref = nextRef++;
+    elementRefMap.set(ref, element);
+    return ref;
+}
+
+/**
+ * Get element by its ref number.
+ * First tries in-memory Map (fast), then falls back to sessionStorage selectors.
+ */
+function getElementByRef(ref) {
+    // Coerce to number — refs may arrive as strings from JSON message passing
+    const numRef = Number(ref);
+
+    // Primary: in-memory Map
+    const element = elementRefMap.get(numRef);
+    if (element && document.contains(element)) {
+        return element;
+    }
+    elementRefMap.delete(numRef);
+
+    // Fallback: sessionStorage selector mapping
+    try {
+        const stored = sessionStorage.getItem(REF_STORAGE_KEY);
+        if (stored) {
+            const mapping = JSON.parse(stored);
+            const selector = mapping[numRef];
+            if (selector) {
+                const fallbackEl = document.querySelector(selector);
+                if (fallbackEl && document.contains(fallbackEl)) {
+                    // Re-populate the Map for future fast lookups
+                    elementRefMap.set(numRef, fallbackEl);
+                    return fallbackEl;
+                }
+            }
+        }
+    } catch (e) {
+        // sessionStorage not available or corrupted
+    }
+
+    return null;
+}
+
+// =============================================================================
+// PORT-BASED CONNECTION (primary communication channel)
+// Avoids "page moved into back/forward cache" errors from chrome.tabs.sendMessage
+// =============================================================================
+
+/**
+ * Establish a persistent port connection to the background service worker.
+ * The background uses this port to send action messages; responses are correlated
+ * via the _msgId field injected by sendViaPort() in background.js.
+ *
+ * If the port disconnects (e.g. the service worker restarts), we attempt to
+ * reconnect after a short delay so the background can re-register us in its
+ * contentPorts Map.
+ */
+(function initPort() {
+    let port = null;
+
+    function connect() {
+        try {
+            port = chrome.runtime.connect({ name: 'webmcp-content' });
+
+            port.onMessage.addListener(async (message) => {
+                const { _msgId } = message;
+
+                // Every message coming through the port must carry a _msgId so the
+                // background can match the response to the originating sendViaPort call.
+                if (!_msgId) return;
+
+                try {
+                    const result = await handleAction(message);
+                    port.postMessage({ _msgId, result });
+                } catch (error) {
+                    port.postMessage({ _msgId, error: error.message });
+                }
+            });
+
+            port.onDisconnect.addListener(() => {
+                port = null;
+                // chrome.runtime.lastError must be read to suppress the unchecked error warning
+                void chrome.runtime.lastError;
+                // Reconnect after a short delay in case the service worker restarted
+                setTimeout(connect, 500);
+            });
+        } catch (e) {
+            // Extension context may be invalidated (e.g. extension reload); give up silently
+            console.warn('[WebMCP] Port connect failed:', e.message);
+        }
+    }
+
+    connect();
+})();
+
+// =============================================================================
 // MESSAGE HANDLER
 // =============================================================================
 
+// Fallback: keep the legacy onMessage listener so callers that still use
+// chrome.tabs.sendMessage (e.g. the reload-retry path in background.js) continue
+// to work without modification.
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     handleAction(request)
         .then(result => sendResponse(result))
@@ -49,18 +188,13 @@ async function handleAction(request) {
         case 'form.fill':
             return fillForm(params, context);
 
-        // RECORDING & SCRAPING
-        case 'startRecording':
-            return startCapture();
-        case 'stopRecording':
-            return stopCapture();
-
-        case 'scrapeText':
-            return scrapeText();
-        case 'scrapeTables':
-            return scrapeTables();
-        case 'scrapeLinks':
-            return scrapeLinks();
+        // Element finding
+        case 'findElement':
+            return findElementByDescription(params.query || params.description);
+        case 'getPageText':
+            return extractMainContent();
+        case 'highlightElement':
+            return highlightElement(params);
 
         // ADDITIONAL ACTIONS
         case 'hover':
@@ -77,8 +211,6 @@ async function handleAction(request) {
             return executeGetAttribute(params);
         case 'waitForElement':
             return executeWaitForElement(params);
-        case 'evaluate':
-            return executeEvaluate(params);
 
         // Mouse actions
         case 'drag':
@@ -92,18 +224,226 @@ async function handleAction(request) {
 }
 
 // =============================================================================
-// PAGE READING
+// PAGE READING — ACCESSIBILITY TREE
 // =============================================================================
 
 function getPageContent() {
+    // Reset refs on each page read so they stay fresh
+    resetRefs();
+
+    const elements = getAccessibilityTree();
+    const forms = getFormsSummary();
+
+    // Persist ref→selector mapping to sessionStorage as fallback
+    persistRefs();
+
     return {
         title: document.title,
         url: window.location.href,
-        forms: getFormsSummary(),
-        buttons: getButtonsSummary(),
-        inputs: getInputsSummary(),
+        elements,
+        forms,
         captcha: detectCaptcha()
     };
+}
+
+/**
+ * Build an accessibility-tree-like structure of interactive elements.
+ * Returns elements with stable integer refs that can be used for click/type/hover.
+ */
+function getAccessibilityTree() {
+    const results = [];
+    const seen = new Set();
+
+    // Collect all interactive elements
+    const selectors = [
+        'a[href]',
+        'button',
+        'input:not([type="hidden"])',
+        'select',
+        'textarea',
+        '[role="button"]',
+        '[role="link"]',
+        '[role="tab"]',
+        '[role="menuitem"]',
+        '[role="checkbox"]',
+        '[role="radio"]',
+        '[role="switch"]',
+        '[role="combobox"]',
+        '[role="searchbox"]',
+        '[role="textbox"]',
+        '[contenteditable="true"]',
+        'summary',
+        'details',
+        '[tabindex]',
+        'input[type="submit"]',
+        'input[type="button"]',
+    ];
+
+    const allElements = document.querySelectorAll(selectors.join(','));
+
+    for (const el of allElements) {
+        if (seen.has(el)) continue;
+        seen.add(el);
+
+        // Skip invisible elements
+        if (!isElementVisible(el)) continue;
+
+        const ref = assignRef(el);
+        const entry = buildElementEntry(el, ref);
+        if (entry) results.push(entry);
+
+        // Cap at 200 elements for performance
+        if (results.length >= 200) break;
+    }
+
+    return results;
+}
+
+/**
+ * Check if an element is visible in the viewport or scrollable area
+ */
+function isElementVisible(el) {
+    const style = window.getComputedStyle(el);
+    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+        return false;
+    }
+    // Check if element has dimensions
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) return false;
+    return true;
+}
+
+/**
+ * Build a structured entry for one element
+ */
+function buildElementEntry(el, ref) {
+    const tag = el.tagName.toLowerCase();
+    const role = getEffectiveRole(el);
+    const name = getAccessibleName(el);
+    const selector = getUniqueSelector(el);
+
+    const entry = { ref, role, name, selector };
+
+    // Add state for inputs
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') {
+        entry.type = el.type || tag;
+        if (el.type === 'password') {
+            entry.value = el.value ? '[filled]' : '';
+        } else if (tag === 'select') {
+            entry.value = el.options[el.selectedIndex]?.text || '';
+        } else {
+            entry.value = el.value || '';
+        }
+        if (el.placeholder) entry.placeholder = el.placeholder;
+        if (el.required) entry.required = true;
+        if (el.disabled) entry.disabled = true;
+    }
+
+    // Add checked state for checkboxes/radios
+    if (el.type === 'checkbox' || el.type === 'radio') {
+        entry.checked = el.checked;
+    }
+
+    // Add href for links
+    if (tag === 'a' && el.href) {
+        try {
+            const url = new URL(el.href);
+            entry.href = url.pathname + url.search;
+        } catch {
+            entry.href = el.getAttribute('href');
+        }
+    }
+
+    // Skip elements with no useful name or role
+    if (!name && role === 'generic') return null;
+
+    return entry;
+}
+
+/**
+ * Get the effective ARIA role for an element
+ */
+function getEffectiveRole(el) {
+    // Explicit role takes priority
+    const explicitRole = el.getAttribute('role');
+    if (explicitRole) return explicitRole;
+
+    // Implicit roles by tag
+    const tag = el.tagName.toLowerCase();
+    const type = (el.type || '').toLowerCase();
+
+    switch (tag) {
+        case 'a':       return el.href ? 'link' : 'generic';
+        case 'button':  return 'button';
+        case 'input':
+            switch (type) {
+                case 'button':
+                case 'submit':
+                case 'reset':  return 'button';
+                case 'checkbox': return 'checkbox';
+                case 'radio':   return 'radio';
+                case 'search':  return 'searchbox';
+                case 'email':
+                case 'tel':
+                case 'text':
+                case 'url':
+                case 'number':
+                case 'password': return 'textbox';
+                case 'range':   return 'slider';
+                default:        return 'textbox';
+            }
+        case 'select':   return el.multiple ? 'listbox' : 'combobox';
+        case 'textarea': return 'textbox';
+        case 'summary':  return 'button';
+        default:         return 'generic';
+    }
+}
+
+/**
+ * Get the accessible name for an element using the WAI-ARIA name computation
+ * (simplified version)
+ */
+function getAccessibleName(el) {
+    // 1. aria-labelledby
+    const labelledBy = el.getAttribute('aria-labelledby');
+    if (labelledBy) {
+        const names = labelledBy.split(/\s+/).map(id => {
+            const ref = document.getElementById(id);
+            return ref ? getText(ref) : '';
+        }).filter(Boolean);
+        if (names.length) return names.join(' ');
+    }
+
+    // 2. aria-label
+    const ariaLabel = el.getAttribute('aria-label');
+    if (ariaLabel) return ariaLabel.trim();
+
+    // 3. Associated <label>
+    if (el.labels && el.labels.length > 0) {
+        return getText(el.labels[0]);
+    }
+
+    // 4. title attribute
+    if (el.title) return el.title.trim();
+
+    // 5. placeholder for inputs
+    if (el.placeholder) return el.placeholder.trim();
+
+    // 6. alt for images inside buttons/links
+    if (el.tagName.toLowerCase() === 'img') return (el.alt || '').trim();
+    const img = el.querySelector('img[alt]');
+    if (img && img.alt) return img.alt.trim();
+
+    // 7. Text content (trimmed, limited)
+    const text = getText(el);
+    if (text) return text.slice(0, 80);
+
+    // 8. value for submit buttons
+    if (el.type === 'submit' || el.type === 'button') {
+        return (el.value || '').trim();
+    }
+
+    return '';
 }
 
 function getFormsSummary() {
@@ -117,48 +457,32 @@ function getFormsSummary() {
     }));
 }
 
-function getButtonsSummary() {
-    const buttons = document.querySelectorAll('button, input[type="button"], input[type="submit"], [role="button"]');
-    return Array.from(buttons).slice(0, 20).map((btn, index) => ({
-        index,
-        text: getText(btn),
-        type: btn.type || 'button',
-        id: btn.id || null,
-        classes: btn.className || null
-    }));
-}
-
-function getInputsSummary() {
-    const inputs = document.querySelectorAll('input, select, textarea');
-    return Array.from(inputs).slice(0, 30).map((input, index) => ({
-        index,
-        type: input.type || input.tagName.toLowerCase(),
-        name: input.name || null,
-        id: input.id || null,
-        label: getInputLabel(input),
-        required: input.required || false,
-        value: input.type === 'password' ? '[hidden]' : (input.value || null)
-    }));
-}
-
 // =============================================================================
 // INTERACTION ACTIONS
 // =============================================================================
 
 async function executeClick(params, context) {
-    const { selector, description, index } = params;
+    const { selector, description, text: textParam, index, ref } = params;
+    // MCP tool sends "text" but legacy code uses "description" — support both
+    const descriptionText = description || textParam;
 
     let element;
 
-    if (selector) {
+    if (ref !== undefined) {
+        element = getElementByRef(ref);
+        if (!element) {
+            throw new Error(`Element ref ${ref} not found or stale`);
+        }
+    } else if (selector) {
         element = document.querySelector(selector);
     } else if (typeof index === 'number') {
         const buttons = document.querySelectorAll('button, input[type="button"], input[type="submit"], [role="button"], a');
         element = buttons[index];
-    } else if (description) {
-        // Use LLM to find element (via background script)
-        const result = await findElementByDescription(description);
-        element = result.element;
+    } else if (descriptionText) {
+        const result = findElementByDescription(descriptionText);
+        if (result.matches && result.matches.length > 0) {
+            element = getElementByRef(result.matches[0].ref);
+        }
     }
 
     if (!element) {
@@ -170,11 +494,18 @@ async function executeClick(params, context) {
 }
 
 async function executeType(params) {
-    const { selector, text, clear = true } = params;
+    const { selector, text, clear = true, ref } = params;
 
-    const element = document.querySelector(selector);
+    let element;
+    if (ref !== undefined) {
+        element = getElementByRef(ref);
+        if (!element) throw new Error(`Element ref ${ref} not found or stale`);
+    } else {
+        element = document.querySelector(selector);
+    }
+
     if (!element) {
-        throw new Error(`Element not found: ${selector}`);
+        throw new Error(`Element not found: ${selector || `ref ${ref}`}`);
     }
 
     element.focus();
@@ -239,17 +570,23 @@ async function executeScroll(params) {
 // =============================================================================
 
 async function executeHover(params) {
-    const { selector } = params;
-    const element = document.querySelector(selector);
+    const { selector, ref } = params;
+
+    let element;
+    if (ref !== undefined) {
+        element = getElementByRef(ref);
+        if (!element) throw new Error(`Element ref ${ref} not found or stale`);
+    } else {
+        element = document.querySelector(selector);
+    }
 
     if (!element) {
-        throw new Error(`Element not found: ${selector}`);
+        throw new Error(`Element not found: ${selector || `ref ${ref}`}`);
     }
 
     element.scrollIntoView({ behavior: 'smooth', block: 'center' });
     await sleep(200);
 
-    // Dispatch mouseenter and mouseover events
     element.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
     element.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
 
@@ -356,18 +693,6 @@ async function executeWaitForElement(params) {
     }
 
     throw new Error(`Element not found within ${timeout}ms: ${selector}`);
-}
-
-function executeEvaluate(params) {
-    const { expression } = params;
-
-    try {
-        // WARNING: This is powerful - use with caution
-        const result = eval(expression);
-        return { result: String(result) };
-    } catch (error) {
-        throw new Error(`Evaluation failed: ${error.message}`);
-    }
 }
 
 async function executeDrag(params) {
@@ -485,37 +810,38 @@ async function executeRightClick(params) {
 // =============================================================================
 
 async function executeUpload(params) {
-    const { selector, fileUrl, fileName } = params;
+    const { selector, fileBase64, filename, ref } = params;
 
-    const input = document.querySelector(selector);
+    let input;
+    if (ref !== undefined) {
+        input = getElementByRef(ref);
+        if (!input) throw new Error(`Element ref ${ref} not found or stale`);
+    } else {
+        input = document.querySelector(selector);
+    }
+
     if (!input || input.type !== 'file') {
-        throw new Error(`File input not found: ${selector}`);
+        throw new Error(`File input not found: ${selector || `ref ${ref}`}`);
     }
 
-    try {
-        // Fetch file from URL
-        const response = await fetch(fileUrl);
-        const blob = await response.blob();
-
-        // Create File object
-        const file = new File([blob], fileName, { type: blob.type });
-
-        // Use DataTransfer to set files
-        const dataTransfer = new DataTransfer();
-        dataTransfer.items.add(file);
-        input.files = dataTransfer.files;
-
-        // Dispatch events
-        input.dispatchEvent(new Event('change', { bubbles: true }));
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-
-        console.log(`[Webagent] Uploaded file: ${fileName}`);
-        return { uploaded: true, fileName };
-
-    } catch (error) {
-        console.error('[Webagent] File upload failed:', error);
-        throw error;
+    // Decode Base64 string into a Uint8Array
+    const binaryString = atob(fileBase64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
     }
+
+    // Create a File object from the decoded bytes
+    const file = new File([bytes], filename);
+
+    // Assign the file to the input via DataTransfer
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    input.files = dt.files;
+
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+
+    return { uploaded: true, filename };
 }
 
 // =============================================================================
@@ -606,6 +932,91 @@ async function fillForm(params, context) {
         total: analysis.fields.length,
         errors: errors.length > 0 ? errors : null
     };
+}
+
+// =============================================================================
+// CONTENT EXTRACTION
+// =============================================================================
+
+/**
+ * Extract cleaned main content text from the page.
+ * Uses heuristics to find the primary content area.
+ */
+function extractMainContent() {
+    // Try common content containers
+    const contentSelectors = [
+        'main',
+        'article',
+        '[role="main"]',
+        '#content',
+        '#main-content',
+        '.content',
+        '.main-content',
+        '.post-content',
+        '.article-content',
+        '.entry-content',
+    ];
+
+    let contentEl = null;
+    for (const sel of contentSelectors) {
+        contentEl = document.querySelector(sel);
+        if (contentEl) break;
+    }
+
+    // Fallback to body
+    if (!contentEl) contentEl = document.body;
+
+    // Clone and remove noise
+    const clone = contentEl.cloneNode(true);
+    const noiseSelectors = 'nav, header, footer, aside, [role="navigation"], [role="banner"], [role="contentinfo"], .sidebar, .nav, .menu, .ad, .advertisement, script, style, noscript, svg, iframe';
+    clone.querySelectorAll(noiseSelectors).forEach(el => el.remove());
+
+    // Get text and clean whitespace
+    const text = (clone.innerText || clone.textContent || '')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+
+    return { text, length: text.length };
+}
+
+/**
+ * Temporarily highlight an element on the page.
+ * Useful for human oversight — shows what the AI is about to interact with.
+ */
+function highlightElement(params) {
+    const { selector, ref, duration = 2000 } = params;
+
+    let element;
+    if (ref !== undefined) {
+        element = getElementByRef(ref);
+    } else if (selector) {
+        element = document.querySelector(selector);
+    }
+
+    if (!element) {
+        throw new Error(`Element not found for highlight`);
+    }
+
+    // Store original styles
+    const originalOutline = element.style.outline;
+    const originalOutlineOffset = element.style.outlineOffset;
+    const originalTransition = element.style.transition;
+
+    // Apply highlight
+    element.style.transition = 'outline 0.15s ease';
+    element.style.outline = '3px solid #7c3aed';
+    element.style.outlineOffset = '2px';
+
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    // Remove highlight after duration
+    setTimeout(() => {
+        element.style.outline = originalOutline;
+        element.style.outlineOffset = originalOutlineOffset;
+        element.style.transition = originalTransition;
+    }, duration);
+
+    return { highlighted: true, duration };
 }
 
 // =============================================================================
@@ -734,152 +1145,81 @@ function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function findElementByDescription(description) {
-    // TODO: Use LLM via background script to find element
-    throw new Error('LLM element finding not yet implemented');
-}
-// =============================================================================
-// RECORDING CAPTURE
-// =============================================================================
+/**
+ * Find elements matching a text description.
+ * Searches visible text, aria-label, placeholder, title, alt.
+ * Returns array of matches with refs.
+ */
+function findElementByDescription(description) {
+    const query = description.toLowerCase().trim();
+    const matches = [];
 
-let isCapturing = false;
+    // Search through all interactive elements
+    const selectors = 'a, button, input:not([type="hidden"]), select, textarea, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [contenteditable="true"], [tabindex]';
+    const elements = document.querySelectorAll(selectors);
 
-function startCapture() {
-    if (isCapturing) return { success: true };
-    isCapturing = true;
+    for (const el of elements) {
+        if (!isElementVisible(el)) continue;
 
-    document.addEventListener('click', captureClick, true);
-    document.addEventListener('change', captureChange, true);
-    document.addEventListener('input', captureInput, true);
-    document.addEventListener('scroll', captureScroll, { capture: true, passive: true });
-    
-    console.log('[WebMCP] Started capturing DOM events');
-    return { success: true };
-}
-
-function stopCapture() {
-    if (!isCapturing) return { success: true };
-    isCapturing = false;
-
-    document.removeEventListener('click', captureClick, true);
-    document.removeEventListener('change', captureChange, true);
-    document.removeEventListener('input', captureInput, true);
-    document.removeEventListener('scroll', captureScroll, true);
-    
-    console.log('[WebMCP] Stopped capturing DOM events');
-    return { success: true };
-}
-
-function captureClick(event) {
-    if (!isCapturing || !event.isTrusted) return;
-    
-    // Don't capture clicks on extension UI if injected
-    if (event.target.closest('#webmcp-overlay')) return;
-
-    recordAction({
-        type: 'click',
-        selector: getUniqueSelector(event.target),
-        text: getText(event.target)
-    });
-}
-
-function captureChange(event) {
-    if (!isCapturing || !event.isTrusted) return;
-    
-    const target = event.target;
-    if (target.tagName === 'SELECT') {
-        recordAction({
-            type: 'select',
-            selector: getUniqueSelector(target),
-            value: target.value
-        });
-    } else if (target.type === 'checkbox' || target.type === 'radio') {
-        recordAction({
-            type: 'click',
-            selector: getUniqueSelector(target)
-        });
-    }
-}
-
-// Debounce input capture
-let inputTimeout;
-function captureInput(event) {
-    if (!isCapturing || !event.isTrusted) return;
-    const target = event.target;
-    
-    if (target.type === 'password' || target.type === 'hidden') return;
-
-    clearTimeout(inputTimeout);
-    inputTimeout = setTimeout(() => {
-        recordAction({
-            type: 'type',
-            selector: getUniqueSelector(target),
-            text: target.value
-        });
-    }, 500);
-}
-
-// Throttle scroll capture
-let lastScroll = 0;
-function captureScroll(event) {
-    if (!isCapturing || !event.isTrusted) return;
-    
-    const now = Date.now();
-    if (now - lastScroll < 1000) return; // Only capture every 1s
-    lastScroll = now;
-
-    const target = event.target === document ? window : event.target;
-    // We generally just want window scrolls for playback
-    if (target !== window && target !== document.scrollingElement) return;
-
-    recordAction({
-        type: 'scroll',
-        direction: 'down', // Simplified
-        amount: window.scrollY
-    });
-}
-
-function recordAction(action) {
-    chrome.runtime.sendMessage({
-        type: 'recordedAction',
-        action: {
-            ...action,
-            url: window.location.href,
-            timestamp: Date.now()
-        }
-    });
-}
-
-// =============================================================================
-// SCRAPING IMPLEMENTATION
-// =============================================================================
-
-function scrapeText() {
-    return document.body.innerText;
-}
-
-function scrapeLinks() {
-    return Array.from(document.links).map(a => ({
-        text: a.innerText.trim(),
-        href: a.href
-    })).filter(l => l.text && l.href);
-}
-
-function scrapeTables() {
-    return Array.from(document.querySelectorAll('table')).map((table, i) => {
-        const headers = Array.from(table.querySelectorAll('th')).map(th => th.innerText.trim());
-        const rows = Array.from(table.querySelectorAll('tr')).slice(1).map(tr => {
-            return Array.from(tr.querySelectorAll('td')).map(td => td.innerText.trim());
-        });
-        
-        // Convert to object if headers exist
-        if (headers.length > 0) {
-            return rows.map(row => {
-                const obj = {};
-                headers.forEach((h, idx) => obj[h] = row[idx]);
-                return obj;
+        const score = getMatchScore(el, query);
+        if (score > 0) {
+            const ref = assignRef(el);
+            matches.push({
+                ref,
+                role: getEffectiveRole(el),
+                name: getAccessibleName(el),
+                selector: getUniqueSelector(el),
+                score
             });
         }
-        return rows;
-    });
+
+        if (matches.length >= 10) break;
+    }
+
+    // Sort by score descending
+    matches.sort((a, b) => b.score - a.score);
+
+    // Persist updated refs
+    persistRefs();
+
+    return { matches };
 }
+
+/**
+ * Score how well an element matches a text query
+ */
+function getMatchScore(el, query) {
+    let score = 0;
+
+    // Exact text match (highest)
+    const text = getText(el).toLowerCase();
+    if (text === query) return 100;
+    if (text.includes(query)) score = Math.max(score, 80);
+
+    // aria-label match
+    const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase();
+    if (ariaLabel === query) return 95;
+    if (ariaLabel.includes(query)) score = Math.max(score, 75);
+
+    // placeholder match
+    const placeholder = (el.placeholder || '').toLowerCase();
+    if (placeholder.includes(query)) score = Math.max(score, 70);
+
+    // title match
+    const title = (el.title || '').toLowerCase();
+    if (title.includes(query)) score = Math.max(score, 65);
+
+    // alt text match (for images in buttons/links)
+    const img = el.querySelector('img[alt]');
+    const alt = img ? img.alt.toLowerCase() : (el.alt || '').toLowerCase();
+    if (alt.includes(query)) score = Math.max(score, 60);
+
+    // name/id match (for inputs)
+    const name = (el.name || '').toLowerCase();
+    const id = (el.id || '').toLowerCase();
+    if (name.includes(query)) score = Math.max(score, 50);
+    if (id.includes(query)) score = Math.max(score, 45);
+
+    return score;
+}
+

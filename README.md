@@ -1,54 +1,67 @@
 # WebMCP
 
-**WebMCP** is a standalone browser automation platform that bridges the gap between human browsing and AI agent control.
+[![npm version](https://img.shields.io/npm/v/webagent-mcp.svg)](https://www.npmjs.com/package/webagent-mcp)
 
-It consists of two main components:
-1. **WebMCP Extension** (`webagent-extension`): A powerful Chrome extension for recording, scraping, and managing browser tasks.
-2. **WebMCP Server** (`webagent-mcp`): An MCP (Model Context Protocol) server that allows AI agents (like Claude, Cursor, or custom LLMs) to control the browser via the extension.
+**WebMCP** gives AI agents control of your real browser — your browser, your data, your machine. No cloud sandboxes, no proxies.
 
-**🌐 Live Website:** [https://webmcp.tanujmittal.com](https://webmcp.tanujmittal.com)
+It connects AI agents (Claude, Cursor, custom LLMs) to a Chrome extension via the **Model Context Protocol (MCP)**, letting them navigate, click, type, and read pages exactly like you would.
 
-## Project Structure
+## What Makes WebMCP Different
 
-- **`webagent-extension/`**: The Chrome Extension source code.
-- **`webagent-mcp/`**: The MCP server and bridge implementation (Node.js).
-- **`webagent-vscode/`**: VS Code extension wrapper for the MCP server.
-- **`releases/`**: Downloadable extension packages (v1.0.4).
-- **`assets/`**: Branding and store listing images.
-- **`scripts/`**: Helper scripts for deployment and maintenance.
-- **`docs/`**: Integration guides and protocol documentation.
+- **Real browser** — agents use your actual Chrome with your cookies, sessions, and logins
+- **MCP-native** — built on the open standard for AI tool communication
+- **Privacy-first** — everything runs locally, nothing leaves your machine
+- **25 automation tools** — navigate, read pages, fill forms, manage tabs, and more
+- **Accessibility tree** — agents see pages as structured elements with reference numbers, not raw HTML
+- **Human oversight** — monitoring popup, kill switch, CAPTCHA detection
 
 ## Quick Start
 
-### 1. Install the Extension
-1. Open Chrome and go to `chrome://extensions`.
-2. Enable **Developer Mode**.
-3. Click **Load unpacked** and select the `webagent-extension` folder.
+### 1. Install Extension
+1. Go to `chrome://extensions`
+2. Enable "Developer mode"
+3. Click "Load unpacked" → select `webagent-extension/`
 
-### 2. Use Standalone Features
-- Open the WebMCP popup.
-- **Record**: Capture your actions and save them as tasks.
-- **Scrape**: Extract data from pages instantly.
-- **Settings**: Configure behavior and logs.
+### 2. Start MCP Server
+```bash
+cd webagent-mcp
+npm install
+npm start          # stdio transport (for Claude, Cursor)
+# or
+npm run dev        # SSE transport on port 3000
+```
 
-### 3. Enable AI Control (Optional)
-To let AI agents control your browser:
+### 3. Connect Your AI
+Configure your AI tool to use the WebMCP MCP server. The extension connects automatically via WebSocket.
 
-1. **Build the MCP Server**:
-   ```bash
-   cd webagent-mcp
-   npm install
-   npm run build
-   ```
-   
-2. **Run in VS Code** (if using Cursor/VS Code AI):
-   - Open `webagent-vscode` folder in VS Code.
-   - Press `F5` to debug or install the generic VSIX package.
-   
-3. **Connect**:
-   - The MCP server will start on port 3000 (SSE) or stdio.
-   - The extension connects automatically via WebSocket.
+## Project Structure
+
+| Directory | Purpose |
+|-----------|---------|
+| `webagent-extension/` | Chrome Extension (MV3) |
+| `webagent-mcp/` | MCP server + WebSocket bridge |
+| `webagent-sdk-js/` | JavaScript SDK for web apps |
+| `webagent-vscode/` | VS Code extension wrapper |
+| `docs/` | Protocol spec, integration guide |
 
 ## Documentation
-- [Integration Guide](docs/integration-guide.md)
-- [Walkthrough](docs/walkthrough.md)
+
+- [CLAUDE.md](CLAUDE.md) — Project index for AI agents
+- [ARCHITECTURE.md](ARCHITECTURE.md) — System design and data flow
+- [Integration Guide](docs/integration-guide.md) — SDK usage and examples
+- [Protocol Spec](docs/protocol.md) — Message formats and actions
+- [Changelog](docs/CHANGELOG.md) — Version history
+
+## Permissions
+
+WebMCP requires 5 Chrome permissions:
+
+| Permission | Why |
+|------------|-----|
+| `activeTab` | Screenshot capture |
+| `alarms` | Keep-alive for MV3 service worker (prevents WebSocket disconnect) |
+| `storage` | Settings persistence |
+| `tabs` | Tab management and messaging |
+| `cookies` | Session management for automation |
+
+**Website:** [webmcp.tanujmittal.com](https://webmcp.tanujmittal.com)

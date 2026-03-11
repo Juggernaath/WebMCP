@@ -78,6 +78,10 @@ export function isRetryableError(error) {
     // Element not found might be timing issue
     if (message.includes('element not found')) return true;
 
+    // BFCache / content script port errors are retryable
+    if (message.includes('back/forward cache')) return true;
+    if (message.includes('receiving end does not exist')) return true;
+
     // Extension not connected is retryable
     if (message.includes('not connected')) return true;
 
