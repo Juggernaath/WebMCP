@@ -1,4 +1,5 @@
 {
+  "id": "wf-reddit-keyword-alert",
   "name": "Reddit Keyword Alert",
   "nodes": [
     {

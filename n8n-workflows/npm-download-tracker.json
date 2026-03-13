@@ -1,4 +1,5 @@
 {
+  "id": "wf-npm-download-tracker",
   "name": "npm Download Tracker",
   "nodes": [
     {

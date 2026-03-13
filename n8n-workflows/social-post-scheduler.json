@@ -1,4 +1,5 @@
 {
+  "id": "wf-social-post-scheduler",
   "name": "Social Post Scheduler",
   "nodes": [
     {
