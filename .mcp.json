@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "webmcp": {
+      "command": "node",
+      "args": ["bin/webagent-mcp.js"],
+      "cwd": "C:\\Coding\\WebMCP\\webagent-mcp"
+    }
+  }
+}

@@ -1,0 +1,110 @@
+{
+  "name": "GitHub Star Milestones",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 24
+            }
+          ]
+        }
+      },
+      "id": "schedule-daily",
+      "name": "Daily Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "url": "https://api.github.com/repos/Juggernaath/WebMCP",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "fetch-github",
+      "name": "Fetch GitHub Stats",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const stars = $input.first().json.stargazers_count;\nconst forks = $input.first().json.forks_count;\nconst milestones = [10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000];\n\n// n8n static data persists between executions\nconst lastKnownStars = $getWorkflowStaticData('global').lastStars || 0;\n$getWorkflowStaticData('global').lastStars = stars;\n\nconst crossedMilestones = milestones.filter(m => stars >= m && lastKnownStars < m);\n\nreturn [{\n  json: {\n    stars,\n    forks,\n    lastKnownStars,\n    crossedMilestones,\n    hasMilestone: crossedMilestones.length > 0,\n    highestMilestone: crossedMilestones.length > 0 ? Math.max(...crossedMilestones) : null\n  }\n}];"
+      },
+      "id": "check-milestones",
+      "name": "Check Milestones",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "id": "milestone-crossed",
+              "leftValue": "={{ $json.hasMilestone }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if-milestone",
+      "name": "Milestone Crossed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "fromEmail": "your-email@gmail.com",
+        "toEmail": "your-email@gmail.com",
+        "subject": "=WebMCP hit {{ $json.highestMilestone }} stars!",
+        "emailType": "text",
+        "message": "=WebMCP just crossed {{ $json.highestMilestone }} GitHub stars!\n\nCurrent stats:\n- Stars: {{ $json.stars }}\n- Forks: {{ $json.forks }}\n- Previous count: {{ $json.lastKnownStars }}\n\nConsider posting a celebration tweet."
+      },
+      "id": "email-notify",
+      "name": "Email Notification",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [880, 100]
+    }
+  ],
+  "connections": {
+    "Daily Check": {
+      "main": [[{ "node": "Fetch GitHub Stats", "type": "main", "index": 0 }]]
+    },
+    "Fetch GitHub Stats": {
+      "main": [[{ "node": "Check Milestones", "type": "main", "index": 0 }]]
+    },
+    "Check Milestones": {
+      "main": [[{ "node": "Milestone Crossed?", "type": "main", "index": 0 }]]
+    },
+    "Milestone Crossed?": {
+      "main": [
+        [
+          { "node": "Email Notification", "type": "main", "index": 0 }
+        ],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

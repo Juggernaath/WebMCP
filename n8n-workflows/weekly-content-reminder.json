@@ -1,0 +1,86 @@
+{
+  "name": "Weekly Content Reminder",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "schedule-monday",
+      "name": "Monday 8 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 8-week content calendar embedded\n// Update this as content gets published\nconst calendar = [\n  {\n    week: 1,\n    theme: 'Foundation',\n    gate: 'CWS approval',\n    tasks: [\n      { day: 'Tue', platform: 'Hacker News', content: 'Show HN post', file: 'show-hn.md' },\n      { day: 'Thu', platform: 'Reddit', content: 'r/ClaudeAI post', file: 'reddit-posts.md' }\n    ]\n  },\n  {\n    week: 2,\n    theme: 'Developer Community',\n    gate: 'CWS approved',\n    tasks: [\n      { day: 'Tue', platform: 'Dev.to', content: 'Tutorial article', file: 'devto-tutorial.md' },\n      { day: 'Thu', platform: 'Twitter/X', content: 'Thread 1: What if your AI could use Chrome', file: 'tweet-threads.md' }\n    ]\n  },\n  {\n    week: 3,\n    theme: 'Expand Reach',\n    tasks: [\n      { day: 'Mon', platform: 'LinkedIn', content: 'Launch announcement', file: 'linkedin-producthunt-comparison.md' },\n      { day: 'Wed', platform: 'Reddit', content: 'r/Cursor post', file: 'reddit-posts.md' },\n      { day: 'Fri', platform: 'Reddit', content: 'r/LocalLLaMA post', file: 'reddit-posts.md' }\n    ]\n  },\n  {\n    week: 4,\n    theme: 'Comparison & Credibility',\n    tasks: [\n      { day: 'Tue', platform: 'Twitter/X', content: 'Thread 2: Browser tool comparison', file: 'tweet-threads.md' },\n      { day: 'Thu', platform: 'Website Blog', content: 'Comparison blog post', file: 'linkedin-producthunt-comparison.md' }\n    ]\n  },\n  {\n    week: 5,\n    theme: 'Product Hunt Launch',\n    tasks: [\n      { day: 'Tue', platform: 'Product Hunt', content: 'PH launch', file: 'linkedin-producthunt-comparison.md' },\n      { day: 'Wed', platform: 'Twitter/X', content: 'PH launch amplification tweet', file: 'ad-hoc' }\n    ]\n  },\n  {\n    week: 6,\n    theme: 'Technical Deep Dive',\n    tasks: [\n      { day: 'Tue', platform: 'Twitter/X', content: 'Thread 3: How WebMCP reads a page', file: 'tweet-threads.md' },\n      { day: 'Thu', platform: 'All', content: 'Engage in comments from previous posts', file: 'n/a' }\n    ]\n  },\n  {\n    week: 7,\n    theme: 'Second Wave',\n    tasks: [\n      { day: 'Tue', platform: 'Dev.to', content: 'Follow-up article based on feedback', file: 'write-new' },\n      { day: 'Thu', platform: 'GitHub', content: 'Discussions engagement', file: 'n/a' }\n    ]\n  },\n  {\n    week: 8,\n    theme: 'Retrospective & Plan',\n    tasks: [\n      { day: 'Mon', platform: 'Internal', content: 'Review all metrics, plan next 8 weeks', file: 'n/a' }\n    ]\n  }\n];\n\n// Calculate current week based on campaign start\nconst campaignStart = new Date(2026, 2, 16); // Monday of week 1 (local time, month is 0-indexed)\nconst now = new Date();\nconst weekNum = Math.floor((now - campaignStart) / (7 * 24 * 60 * 60 * 1000)) + 1;\n\nconst currentWeek = calendar.find(w => w.week === weekNum);\n\nif (!currentWeek || weekNum > 8) {\n  return [{ json: { message: 'Campaign complete or not started yet', weekNum, send: false } }];\n}\n\nreturn [{\n  json: {\n    weekNum,\n    theme: currentWeek.theme,\n    gate: currentWeek.gate || 'none',\n    tasks: currentWeek.tasks,\n    send: true\n  }\n}];"
+      },
+      "id": "get-week-tasks",
+      "name": "Get This Week's Tasks",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "id": "should-send",
+              "leftValue": "={{ $json.send }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if-active",
+      "name": "Campaign Active?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "fromEmail": "your-email@gmail.com",
+        "toEmail": "your-email@gmail.com",
+        "subject": "=WebMCP Week {{ $json.weekNum }}: {{ $json.theme }}",
+        "emailType": "text",
+        "message": "=WebMCP Content Calendar — Week {{ $json.weekNum }}: {{ $json.theme }}\n{{ $json.gate !== 'none' ? 'Gate: ' + $json.gate + '\\n' : '' }}\nThis week's tasks:\n{{ $json.tasks.map(t => `  ${t.day}: [${t.platform}] ${t.content} (from ${t.file})`).join('\\n') }}\n\nReminder: Review all content before posting. Nothing goes live without your approval.\n\nFiles are in the marketing/ directory of the WebMCP repo."
+      },
+      "id": "send-reminder",
+      "name": "Send Reminder Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [660, -100]
+    }
+  ],
+  "connections": {
+    "Monday 8 AM": {
+      "main": [[{ "node": "Get This Week's Tasks", "type": "main", "index": 0 }]]
+    },
+    "Get This Week's Tasks": {
+      "main": [[{ "node": "Campaign Active?", "type": "main", "index": 0 }]]
+    },
+    "Campaign Active?": {
+      "main": [
+        [{ "node": "Send Reminder Email", "type": "main", "index": 0 }],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

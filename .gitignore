@@ -107,3 +107,11 @@ package-lock.json
 *.png
 !webagent-extension/icons/*.png
 
+# Marketing (private strategy docs — except metrics.json for GitHub Actions)
+marketing/*
+!marketing/metrics.json
+
+# n8n Docker data
+n8n_data/
+postgres_data/
+

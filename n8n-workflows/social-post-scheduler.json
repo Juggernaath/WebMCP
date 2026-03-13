@@ -1,0 +1,138 @@
+{
+  "name": "Social Post Scheduler",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "schedule-check",
+      "name": "Check Every 6 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Scheduled posts queue\n// Add posts here when ready to schedule\n// Set 'approved: true' only after user review\n// Set 'posted: true' after successful posting\nconst staticData = $getWorkflowStaticData('global');\n\nif (!staticData.queue) {\n  // Initialize with empty queue\n  // To schedule a post, add it to this queue via n8n UI\n  staticData.queue = [\n    // Example format:\n    // {\n    //   id: 'show-hn-1',\n    //   platform: 'twitter',\n    //   scheduledDate: '2026-03-18T14:00:00Z',\n    //   content: 'Tweet text here',\n    //   approved: false,\n    //   posted: false\n    // }\n  ];\n}\n\nconst now = new Date();\nconst pendingPosts = staticData.queue.filter(p => \n  p.approved && \n  !p.posted && \n  new Date(p.scheduledDate) <= now\n);\n\nif (pendingPosts.length === 0) {\n  return [{ json: { hasPosts: false, message: 'No posts due' } }];\n}\n\nreturn pendingPosts.map(p => ({ json: { ...p, hasPosts: true } }));"
+      },
+      "id": "check-queue",
+      "name": "Check Post Queue",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "id": "has-posts",
+              "leftValue": "={{ $json.hasPosts }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if-pending",
+      "name": "Posts Due?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            { "id": "is-twitter", "leftValue": "={{ $json.platform }}", "rightValue": "twitter", "operator": { "type": "string", "operation": "equals" } }
+          ]
+        }
+      },
+      "id": "route-platform",
+      "name": "Route by Platform",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "text": "={{ $json.content }}",
+        "additionalFields": {}
+      },
+      "id": "post-twitter",
+      "name": "Post to Twitter",
+      "type": "n8n-nodes-base.twitter",
+      "typeVersion": 2,
+      "position": [880, -100],
+      "credentials": {
+        "twitterOAuth2Api": {
+          "id": "CONFIGURE_IN_N8N",
+          "name": "Twitter OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Mark post as posted in the queue\nconst staticData = $getWorkflowStaticData('global');\nconst postId = $input.first().json.id;\nconst post = staticData.queue.find(p => p.id === postId);\nif (post) {\n  post.posted = true;\n  post.postedAt = new Date().toISOString();\n}\nreturn [{ json: { success: true, postId, postedAt: new Date().toISOString() } }];"
+      },
+      "id": "mark-posted",
+      "name": "Mark as Posted",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, -100]
+    },
+    {
+      "parameters": {
+        "fromEmail": "your-email@gmail.com",
+        "toEmail": "your-email@gmail.com",
+        "subject": "=WebMCP: Posted to {{ $json.platform }}",
+        "emailType": "text",
+        "message": "=Successfully posted to {{ $json.platform }}.\n\nPost ID: {{ $json.id }}\nContent preview: {{ $json.content.substring(0, 100) }}...\n\nCheck the post and engage with any replies."
+      },
+      "id": "confirm-email",
+      "name": "Confirm Post",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1100, 100]
+    }
+  ],
+  "connections": {
+    "Check Every 6 Hours": {
+      "main": [[{ "node": "Check Post Queue", "type": "main", "index": 0 }]]
+    },
+    "Check Post Queue": {
+      "main": [[{ "node": "Posts Due?", "type": "main", "index": 0 }]]
+    },
+    "Posts Due?": {
+      "main": [
+        [{ "node": "Route by Platform", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Route by Platform": {
+      "main": [
+        [{ "node": "Post to Twitter", "type": "main", "index": 0 }]
+      ]
+    },
+    "Post to Twitter": {
+      "main": [[
+        { "node": "Mark as Posted", "type": "main", "index": 0 },
+        { "node": "Confirm Post", "type": "main", "index": 0 }
+      ]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

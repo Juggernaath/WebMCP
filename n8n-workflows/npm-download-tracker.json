@@ -1,0 +1,144 @@
+{
+  "name": "npm Download Tracker",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 24
+            }
+          ]
+        }
+      },
+      "id": "schedule-daily",
+      "name": "Daily Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "url": "https://api.npmjs.org/downloads/point/last-week/webagent-mcp",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "fetch-weekly",
+      "name": "Fetch Weekly Downloads",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, -80]
+    },
+    {
+      "parameters": {
+        "url": "https://api.npmjs.org/downloads/point/last-day/webagent-mcp",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "fetch-daily",
+      "name": "Fetch Daily Downloads",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 80]
+    },
+    {
+      "parameters": {
+        "mode": "combineAll"
+      },
+      "id": "merge-downloads",
+      "name": "Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const weekly = $('Fetch Weekly Downloads').first().json.downloads || 0;\nconst daily = $('Fetch Daily Downloads').first().json.downloads || 0;\n\nconst staticData = $getWorkflowStaticData('global');\nconst history = staticData.history || [];\n\nconst today = new Date().toISOString().split('T')[0];\nhistory.push({ date: today, daily, weekly });\n\n// Keep last 90 days\nif (history.length > 90) history.shift();\nstaticData.history = history;\n\n// Detect spike: daily > 3x average of last 7 days (require 7 days history)\nconst recent = history.slice(-8, -1);\nconst avgDaily = recent.length > 0 \n  ? recent.reduce((sum, d) => sum + d.daily, 0) / recent.length \n  : 0;\nconst isSpike = recent.length >= 7 && avgDaily > 0 && daily > avgDaily * 3;\nconst isCrash = recent.length >= 7 && avgDaily > 5 && daily === 0;\n\nreturn [{\n  json: {\n    date: today,\n    daily,\n    weekly,\n    avgDaily: Math.round(avgDaily * 10) / 10,\n    isSpike,\n    isCrash,\n    alert: isSpike || isCrash\n  }\n}];"
+      },
+      "id": "analyze",
+      "name": "Analyze Trends",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "id": "has-alert",
+              "leftValue": "={{ $json.alert }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if-alert",
+      "name": "Alert Needed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [880, 0]
+    },
+    {
+      "parameters": {
+        "fromEmail": "your-email@gmail.com",
+        "toEmail": "your-email@gmail.com",
+        "subject": "=WebMCP npm {{ $json.isSpike ? 'SPIKE' : 'CRASH' }}: {{ $json.daily }} daily downloads",
+        "emailType": "text",
+        "message": "=npm Download Alert for webagent-mcp\n\nDate: {{ $json.date }}\nDaily downloads: {{ $json.daily }}\nWeekly downloads: {{ $json.weekly }}\n7-day average: {{ $json.avgDaily }}/day\n\n{{ $json.isSpike ? 'SPIKE detected — downloads are 3x above average. Check what caused the traffic (HN post? Reddit? Tweet?)' : 'CRASH detected — downloads dropped to zero. Check if npm publish is broken.' }}"
+      },
+      "id": "email-alert",
+      "name": "Send Alert",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1100, -100]
+    }
+  ],
+  "connections": {
+    "Daily Check": {
+      "main": [
+        [
+          { "node": "Fetch Weekly Downloads", "type": "main", "index": 0 },
+          { "node": "Fetch Daily Downloads", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Fetch Weekly Downloads": {
+      "main": [[{ "node": "Merge", "type": "main", "index": 0 }]]
+    },
+    "Fetch Daily Downloads": {
+      "main": [[{ "node": "Merge", "type": "main", "index": 1 }]]
+    },
+    "Merge": {
+      "main": [[{ "node": "Analyze Trends", "type": "main", "index": 0 }]]
+    },
+    "Analyze Trends": {
+      "main": [[{ "node": "Alert Needed?", "type": "main", "index": 0 }]]
+    },
+    "Alert Needed?": {
+      "main": [
+        [{ "node": "Send Alert", "type": "main", "index": 0 }],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

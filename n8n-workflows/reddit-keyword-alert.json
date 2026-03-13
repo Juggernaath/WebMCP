@@ -1,0 +1,114 @@
+{
+  "name": "Reddit Keyword Alert",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 8
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every 8 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "url": "https://www.reddit.com/search.json?q=\"claude browser automation\" OR \"cursor mcp browser\" OR \"mcp chrome extension\" OR \"browser automation mcp\"&sort=new&limit=10",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "http-reddit-search",
+      "name": "Search Reddit",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const posts = $input.first().json.data.children || [];\nconst now = Date.now() / 1000;\nconst eightHoursAgo = now - (8 * 60 * 60);\n\nconst newPosts = posts\n  .filter(p => p.data.created_utc > eightHoursAgo)\n  .map(p => ({\n    title: p.data.title,\n    subreddit: p.data.subreddit_name_prefixed,\n    url: `https://reddit.com${p.data.permalink}`,\n    author: p.data.author,\n    score: p.data.score,\n    created: new Date(p.data.created_utc * 1000).toISOString()\n  }));\n\nreturn newPosts.length > 0 ? newPosts.map(p => ({ json: p })) : [];"
+      },
+      "id": "filter-new-posts",
+      "name": "Filter New Posts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "has-items",
+              "leftValue": "={{ $input.all().length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if-has-posts",
+      "name": "Has New Posts?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "fromEmail": "your-email@gmail.com",
+        "toEmail": "your-email@gmail.com",
+        "subject": "=WebMCP Reddit Alert: {{ $input.all().length }} new mentions",
+        "emailType": "text",
+        "message": "=New Reddit posts mentioning browser automation + MCP/Claude:\n\n{{ $input.all().map(item => `${item.json.title}\\n${item.json.subreddit} | Score: ${item.json.score} | By: ${item.json.author}\\n${item.json.url}\\n`).join('\\n---\\n') }}\n\nReview and engage where relevant."
+      },
+      "id": "send-email",
+      "name": "Email Alert",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [880, -100]
+    }
+  ],
+  "connections": {
+    "Every 8 Hours": {
+      "main": [[{ "node": "Search Reddit", "type": "main", "index": 0 }]]
+    },
+    "Search Reddit": {
+      "main": [[{ "node": "Filter New Posts", "type": "main", "index": 0 }]]
+    },
+    "Filter New Posts": {
+      "main": [[{ "node": "Has New Posts?", "type": "main", "index": 0 }]]
+    },
+    "Has New Posts?": {
+      "main": [
+        [{ "node": "Email Alert", "type": "main", "index": 0 }],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}
