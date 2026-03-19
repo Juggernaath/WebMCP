@@ -4,6 +4,9 @@ Chrome extension for AI browser automation via the Model Context Protocol (MCP).
 
 ## Installation
 
+Install from the [Chrome Web Store](https://chromewebstore.google.com/detail/webmcp/angbjhnglmgbaoknfnifedallkocldah).
+
+Or load unpacked for development:
 1. Open Chrome and navigate to `chrome://extensions`
 2. Enable **Developer mode** (top right)
 3. Click **Load unpacked**

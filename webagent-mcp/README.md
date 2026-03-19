@@ -19,11 +19,7 @@ npx webagent-mcp
 
 ### 2. Install Chrome Extension
 
-Load the extension in Chrome:
-1. Go to `chrome://extensions`
-2. Enable "Developer mode"
-3. Click "Load unpacked"
-4. Select the `webagent-extension` folder
+Install from the [Chrome Web Store](https://chromewebstore.google.com/detail/webmcp/angbjhnglmgbaoknfnifedallkocldah), or load unpacked from `chrome://extensions` → select the `webagent-extension` folder.
 
 ### 3. Configure Your AI Client
 

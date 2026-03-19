@@ -151,7 +151,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 5. Use MCP tools from your AI agent (web_navigate, web_click, etc.)
 
 **For Web App Integrations:**
-1. Install extension from Chrome Web Store (when published)
+1. Install extension from [Chrome Web Store](https://chromewebstore.google.com/detail/webmcp/angbjhnglmgbaoknfnifedallkocldah)
 2. Import SDK: `import { WebagentClient } from '@webagent/sdk'`
 3. Initialize client with extension ID from `chrome://extensions`
 4. Call methods: `await client.navigate(url)`, `await client.click(selector)`, etc.

@@ -18,9 +18,7 @@ It connects AI agents (Claude, Cursor, custom LLMs) to a Chrome extension via th
 ## Quick Start
 
 ### 1. Install Extension
-1. Go to `chrome://extensions`
-2. Enable "Developer mode"
-3. Click "Load unpacked" → select `webagent-extension/`
+Install from the [Chrome Web Store](https://chromewebstore.google.com/detail/webmcp/angbjhnglmgbaoknfnifedallkocldah), or load unpacked from `webagent-extension/` via `chrome://extensions`.
 
 ### 2. Start MCP Server
 ```bash

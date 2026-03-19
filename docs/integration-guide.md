@@ -4,11 +4,7 @@
 
 ### 1. Install the Extension
 
-Load the unpacked extension from `webagent-extension/` in Chrome:
-1. Go to `chrome://extensions`
-2. Enable "Developer mode"
-3. Click "Load unpacked"
-4. Select `webagent-extension` folder
+Install from the [Chrome Web Store](https://chromewebstore.google.com/detail/webmcp/angbjhnglmgbaoknfnifedallkocldah), or load unpacked from `chrome://extensions` → select `webagent-extension` folder.
 
 ### 2. Add SDK to Your App
 
