@@ -44,7 +44,8 @@
             }
           ],
           "combinator": "and"
-        }
+        },
+        "options": {}
       },
       "id": "if-active",
       "name": "Campaign Active?",

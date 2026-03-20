@@ -22,8 +22,6 @@
     {
       "parameters": {
         "url": "https://api.github.com/repos/Juggernaath/WebMCP",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
         "options": {
           "response": {
             "response": {
@@ -63,7 +61,8 @@
             }
           ],
           "combinator": "and"
-        }
+        },
+        "options": {}
       },
       "id": "if-milestone",
       "name": "Milestone Crossed?",
